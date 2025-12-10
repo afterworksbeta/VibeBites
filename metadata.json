@@ -1,0 +1,7 @@
+{
+  "name": "VibeBites",
+  "description": "A retro 90s arcade-style social app for sharing vibes.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
