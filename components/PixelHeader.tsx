@@ -6,9 +6,16 @@ import { UserPlus } from 'lucide-react';
 interface PixelHeaderProps {
     onProfileClick?: () => void;
     onAddFriendClick?: () => void;
+    currentSeed?: string;
+    currentBgColor?: string;
 }
 
-export const PixelHeader: React.FC<PixelHeaderProps> = ({ onProfileClick, onAddFriendClick }) => {
+export const PixelHeader: React.FC<PixelHeaderProps> = ({ 
+  onProfileClick, 
+  onAddFriendClick, 
+  currentSeed = "currentUser_player1",
+  currentBgColor = "#b6e3f4"
+}) => {
   return (
     <div 
       className="w-full h-[100px] border-b-4 border-black flex items-center justify-between px-4 relative z-50 shrink-0"
@@ -40,7 +47,12 @@ export const PixelHeader: React.FC<PixelHeaderProps> = ({ onProfileClick, onAddF
 
       {/* Right User Avatar */}
       <div className="relative cursor-pointer hover:scale-105 transition-transform" onClick={onProfileClick}>
-        <PixelAvatar seed="currentUser_player1" size={48} borderWidth={3} />
+        <PixelAvatar 
+            seed={currentSeed} 
+            size={48} 
+            borderWidth={3} 
+            backgroundColor={currentBgColor}
+        />
         {/* Online Indicator */}
         <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-[#00E676] border-2 border-black"></div>
       </div>

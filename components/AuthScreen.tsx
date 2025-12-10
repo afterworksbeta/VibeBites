@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { COLORS } from '../constants';
 import { PixelSprite } from './PixelSprite';
-import { Eye, EyeOff, Lock, ArrowRight, Loader } from 'lucide-react';
+import { Eye, EyeOff, Lock, ArrowRight, Loader, Check } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 
 interface AuthScreenProps {
@@ -18,10 +18,34 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
+  const [rememberEmail, setRememberEmail] = useState(false);
+
+  // Load saved email on mount
+  useEffect(() => {
+    const savedEmail = localStorage.getItem('vb_saved_email');
+    if (savedEmail) {
+      setEmail(savedEmail);
+      setRememberEmail(true);
+    }
+  }, []);
 
   const toggleMode = () => {
-    setIsLogin(!isLogin);
-    setEmail('');
+    const nextIsLogin = !isLogin;
+    setIsLogin(nextIsLogin);
+    
+    // If switching back to login and we have a saved email, restore it
+    // Otherwise clear fields
+    if (nextIsLogin) {
+        const saved = localStorage.getItem('vb_saved_email');
+        if (saved) {
+            setEmail(saved);
+        } else {
+            setEmail('');
+        }
+    } else {
+        setEmail('');
+    }
+    
     setPassword('');
     setUsername('');
     setErrorMsg('');
@@ -30,6 +54,15 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
   const handleSubmit = async () => {
     setLoading(true);
     setErrorMsg('');
+
+    // Handle Remember Email Logic
+    if (isLogin) {
+        if (rememberEmail) {
+            localStorage.setItem('vb_saved_email', email);
+        } else {
+            localStorage.removeItem('vb_saved_email');
+        }
+    }
 
     try {
       if (isLogin) {
@@ -144,6 +177,19 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
                     className="h-[48px] bg-white border-[4px] border-black rounded-lg px-3 text-[12px] text-black outline-none focus:border-[#2196F3] transition-colors placeholder:text-gray-400 font-['Press_Start_2P'] uppercase"
                 />
             </div>
+
+            {/* Remember Email Checkbox (Login Only) */}
+            {isLogin && (
+                <div 
+                    onClick={() => setRememberEmail(!rememberEmail)}
+                    className="flex items-center gap-3 cursor-pointer select-none -mt-1"
+                >
+                    <div className={`w-[16px] h-[16px] border-[3px] border-black shadow-[2px_2px_0_0_black] flex items-center justify-center transition-all active:translate-y-[1px] active:shadow-none ${rememberEmail ? 'bg-[#00E676]' : 'bg-white'}`}>
+                        {rememberEmail && <Check size={12} color="black" strokeWidth={3} />}
+                    </div>
+                    <span className="text-[8px] text-black uppercase font-bold">REMEMBER EMAIL</span>
+                </div>
+            )}
 
             {/* Password */}
             <div className="flex flex-col gap-2">

@@ -18,7 +18,7 @@ interface ChatScreenProps {
 
 export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initialMessages, onBack, onGameSuccess, onGameLoss }) => {
   const [showGamePopup, setShowGamePopup] = useState(false);
-  const [selectedSentMessage, setSelectedSentMessage] = useState<Message | null>(null);
+  const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
   const [chatMessages, setChatMessages] = useState<Message[]>(initialMessages);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [userId, setUserId] = useState<string | null>(null);
@@ -51,7 +51,9 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
             emojis: m.emojis || [],
             time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             status: m.status,
-            sender_id: m.sender_id
+            sender_id: m.sender_id,
+            topic: m.topic || undefined, // If column existed
+            difficulty: m.difficulty || undefined
         }));
         setChatMessages(formatted);
     }
@@ -97,21 +99,33 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
 
   const handleMessageClick = (msg: Message) => {
     if (msg.type === MessageType.INCOMING_UNSOLVED) {
+      setSelectedMessage(msg);
       setShowGamePopup(true);
     } else if (msg.type === MessageType.OUTGOING) {
-      setSelectedSentMessage(msg);
+      setSelectedMessage(msg);
+      // Logic for Sent popup could be here or separate
     }
   };
 
   const handleWin = () => {
       setShowGamePopup(false);
+      setSelectedMessage(null);
       onGameSuccess();
   }
 
   const handleLoss = () => {
       setShowGamePopup(false);
+      setSelectedMessage(null);
       if (onGameLoss) onGameLoss();
   }
+  
+  const handleClosePopup = () => {
+      setShowGamePopup(false);
+      // Only clear selected if it was the game popup message to avoid clearing for Sent popup if reused
+      if (selectedMessage?.type === MessageType.INCOMING_UNSOLVED) {
+          setSelectedMessage(null);
+      }
+  };
 
   const handleSendMessage = async (text: string, emojis?: string[]) => {
     if (!userId) return;
@@ -179,20 +193,21 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
       <ChatInput onSend={handleSendMessage} />
 
       {/* GAME POPUP (Incoming) */}
-      {showGamePopup && (
+      {showGamePopup && selectedMessage?.type === MessageType.INCOMING_UNSOLVED && (
         <GamePopup 
             friend={friend} 
-            onClose={() => setShowGamePopup(false)} 
+            message={selectedMessage}
+            onClose={handleClosePopup} 
             onWin={handleWin}
             onLoss={handleLoss}
         />
       )}
 
       {/* SENT VIBE POPUP (Outgoing) */}
-      {selectedSentMessage && (
+      {selectedMessage && selectedMessage.type === MessageType.OUTGOING && (
         <SentVibePopup 
-            message={selectedSentMessage} 
-            onClose={() => setSelectedSentMessage(null)}
+            message={selectedMessage} 
+            onClose={() => setSelectedMessage(null)}
         />
       )}
     </div>

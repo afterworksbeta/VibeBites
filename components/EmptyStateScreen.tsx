@@ -115,13 +115,13 @@ export const EmptyStateScreen: React.FC<EmptyStateScreenProps> = ({
             className="h-[72px] bg-[#2196F3] border-[5px] border-black rounded-xl shadow-[6px_6px_0_0_black] flex items-center px-4 active:translate-y-[4px] active:shadow-[2px_2px_0_0_black] transition-all group overflow-hidden relative"
          >
              <div className="w-[48px] h-[48px] flex items-center justify-center bg-black/10 rounded-lg mr-4 border-2 border-black group-hover:bg-white transition-colors">
-                <Key size={24} color="white" strokeWidth={3} />
+                <Key size={24} color="black" strokeWidth={3} />
             </div>
             <div className="flex-1 flex flex-col items-start relative z-10">
-                <span className="text-white text-[12px] font-bold uppercase mb-1">INVITE BY CODE</span>
-                <span className="text-white/80 text-[9px] uppercase font-bold">Share your VibeCode</span>
+                <span className="text-black text-[12px] font-bold uppercase mb-1">INVITE BY CODE</span>
+                <span className="text-black/70 text-[9px] uppercase font-bold">Share your VibeCode</span>
             </div>
-            <ArrowRight size={24} color="white" strokeWidth={5} />
+            <ArrowRight size={24} color="black" strokeWidth={5} />
          </button>
 
          {/* Card 3: Scan QR */}

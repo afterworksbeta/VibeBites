@@ -8,9 +8,19 @@ interface SettingsScreenProps {
   onBack: () => void;
   onLogout: () => void;
   onClearData?: () => void;
+  onEditProfile: () => void;
+  onChangePassword: () => void;
+  currentSeed?: string;
 }
 
-export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack, onLogout, onClearData }) => {
+export const SettingsScreen: React.FC<SettingsScreenProps> = ({ 
+  onBack, 
+  onLogout, 
+  onClearData, 
+  onEditProfile, 
+  onChangePassword,
+  currentSeed 
+}) => {
   const [pushEnabled, setPushEnabled] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [vibrateEnabled, setVibrateEnabled] = useState(false);
@@ -49,15 +59,21 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack, onLogout
                 <h2 className="text-black text-[12px] mb-4 uppercase">ACCOUNT</h2>
                 <div className="flex flex-col gap-3">
                     {/* Edit Profile Row */}
-                    <div className="h-[52px] bg-white border-[3px] border-black rounded-lg flex items-center px-3 cursor-pointer active:scale-[0.98] transition-transform">
+                    <div 
+                        onClick={onEditProfile}
+                        className="h-[52px] bg-white border-[3px] border-black rounded-lg flex items-center px-3 cursor-pointer active:scale-[0.98] transition-transform"
+                    >
                          <div className="mr-3">
-                            <PixelAvatar seed="currentUser_player1" size={32} borderWidth={2} />
+                            <PixelAvatar seed={currentSeed || "currentUser_player1"} size={32} borderWidth={2} />
                          </div>
                          <span className="flex-1 text-[10px] text-black uppercase">EDIT PROFILE</span>
                          <ArrowRight size={20} color="black" strokeWidth={3} />
                     </div>
                      {/* Change Password Row */}
-                     <div className="h-[52px] bg-white border-[3px] border-black rounded-lg flex items-center px-3 cursor-pointer active:scale-[0.98] transition-transform">
+                     <div 
+                        onClick={onChangePassword}
+                        className="h-[52px] bg-white border-[3px] border-black rounded-lg flex items-center px-3 cursor-pointer active:scale-[0.98] transition-transform"
+                    >
                          <div className="mr-3 w-[32px] flex justify-center">
                             <PixelSprite emoji="🔑" size={32} />
                          </div>

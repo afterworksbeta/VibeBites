@@ -14,12 +14,13 @@ import { AddFriendScreen } from './components/AddFriendScreen';
 import { EmptyStateScreen } from './components/EmptyStateScreen';
 import { AvatarSelectionScreen } from './components/AvatarSelectionScreen';
 import { FriendSelectionScreen } from './components/FriendSelectionScreen'; 
+import { ChangePasswordScreen } from './components/ChangePasswordScreen';
 import { MOCK_FRIENDS, MOCK_MESSAGES, COLORS } from './constants';
 import { Friend, CardStatus } from './types';
 import { supabase } from './lib/supabaseClient';
 
 const App: React.FC = () => {
-  const [currentScreen, setCurrentScreen] = useState<'auth' | 'home' | 'chat' | 'compose' | 'success' | 'wrong' | 'profile' | 'settings' | 'invite' | 'addFriend' | 'avatarSelect' | 'friendSelect'>('auth');
+  const [currentScreen, setCurrentScreen] = useState<'auth' | 'home' | 'chat' | 'compose' | 'success' | 'wrong' | 'profile' | 'settings' | 'invite' | 'addFriend' | 'avatarSelect' | 'friendSelect' | 'changePassword'>('auth');
   const [selectedFriend, setSelectedFriend] = useState<Friend | null>(null);
   const [session, setSession] = useState<any>(null);
   
@@ -173,13 +174,30 @@ const App: React.FC = () => {
       setFriends(prev => [newFriend, ...prev]);
       
       if (session) {
+        // Validate if ID is a valid UUID before database operation
+        const isUUID = (id: string | number) => {
+            if (typeof id !== 'string') return false;
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+            return uuidRegex.test(id);
+        };
+
+        if (!isUUID(newFriend.id)) {
+            console.log("Skipping DB insert for non-UUID friend (mock/demo data):", newFriend.id);
+            return;
+        }
+
         // Create friendship in DB
         // Check if friendship already exists
-        const { data: existing } = await supabase
+        const { data: existing, error: fetchError } = await supabase
             .from('friendships')
             .select('*')
             .or(`and(user_id.eq.${session.user.id},friend_id.eq.${newFriend.id}),and(user_id.eq.${newFriend.id},friend_id.eq.${session.user.id})`);
-            
+        
+        if (fetchError) {
+             console.error("Error checking existing friendship:", fetchError);
+             return;
+        }
+
         if (existing && existing.length > 0) {
             console.log("Friendship already exists");
             return;
@@ -189,7 +207,9 @@ const App: React.FC = () => {
             .from('friendships')
             .insert({ user_id: session.user.id, friend_id: newFriend.id }); 
             
-        if (error) console.error("Failed to add friend to DB", error);
+        if (error) {
+             console.error("Failed to add friend to DB:", error.message || error);
+        }
       }
   };
 
@@ -268,6 +288,10 @@ const App: React.FC = () => {
     setCurrentScreen('avatarSelect');
   };
 
+  const handleChangePasswordClick = () => {
+    setCurrentScreen('changePassword');
+  };
+
   const handleAvatarSave = async (newSeed: string, newBgColor: string) => {
     setCurrentUserSeed(newSeed);
     setCurrentUserBgColor(newBgColor);
@@ -303,6 +327,8 @@ const App: React.FC = () => {
             ) : (
                 <>
                     <PixelHeader 
+                        currentSeed={currentUserSeed}
+                        currentBgColor={currentUserBgColor}
                         onProfileClick={handleProfileClick} 
                         onAddFriendClick={handleAddFriendClick}
                     />
@@ -397,11 +423,20 @@ const App: React.FC = () => {
                 onBack={handleSettingsBack} 
                 onLogout={handleLogout}
                 onClearData={handleClearData}
+                onEditProfile={handleEditProfile}
+                onChangePassword={handleChangePasswordClick}
+                currentSeed={currentUserSeed}
+            />
+        )}
+
+        {currentScreen === 'changePassword' && (
+            <ChangePasswordScreen 
+                onBack={() => setCurrentScreen('settings')}
             />
         )}
 
         {currentScreen === 'invite' && (
-            <InviteScreen onBack={handleInviteBack} />
+            <InviteScreen onBack={handleInviteBack} currentUserId={session?.user?.id} />
         )}
         
         {currentScreen === 'addFriend' && (

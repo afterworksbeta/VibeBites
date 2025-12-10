@@ -2,43 +2,51 @@ import React, { useState, useEffect } from 'react';
 import { COLORS } from '../constants';
 import { PixelAvatar } from './PixelAvatar';
 import { PixelSprite } from './PixelSprite';
-import { Friend } from '../types';
-import { X, Lightbulb, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Friend, Message } from '../types';
+import { X, Lightbulb, ChevronLeft, ChevronRight, Tag } from 'lucide-react';
 
 interface GamePopupProps {
   friend: Friend;
+  message?: Message;
   onClose: () => void;
   onWin: () => void;
   onLoss?: () => void;
 }
 
-export const GamePopup: React.FC<GamePopupProps> = ({ friend, onClose, onWin, onLoss }) => {
+export const GamePopup: React.FC<GamePopupProps> = ({ friend, message, onClose, onWin, onLoss }) => {
   const [isPaused, setIsPaused] = useState(false);
   const [scrollPos, setScrollPos] = useState(0);
-  const [showHint, setShowHint] = useState(false);
+  const [showTopic, setShowTopic] = useState(false);
   const [currentSet, setCurrentSet] = useState(0);
 
-  // Sprite sequences separated into sets
-  const spriteSets = [
-    ['🏃', '🏁', '⏱️'],
-    ['💿', '⭐', '🌅']
-  ];
+  // Dynamic Content Logic
+  // If message provided, use its emojis. If not, fallback to default sets.
+  const dynamicSprites = message?.emojis && message.emojis.length > 0 
+      ? [message.emojis] // Wrap in array as single set
+      : [['🏃', '🏁', '⏰'], ['💿', '⭐', '🌅']];
 
-  // Dynamic hints matching the sprite sets
-  const hintMessages = [
-    "HINT: IT'S ABOUT RUSHING!",
-    "HINT: MORNING VIBES!"
-  ];
+  const spriteSets = dynamicSprites;
+
+  // Dynamic topics
+  const dynamicTopic = message?.topic ? `TOPIC: ${message.topic}` : "TOPIC: MYSTERY";
+  const defaultTopics = ["TOPIC: RUSH HOUR", "TOPIC: MORNING VIBES"];
+  
+  const topicMessages = message?.emojis && message.emojis.length > 0
+      ? [dynamicTopic]
+      : defaultTopics;
 
   // Retro scrolling loop
   useEffect(() => {
     if (isPaused) return;
 
     const interval = setInterval(() => {
-      // Slower speed: 2px instead of 4px
-      // 500px is roughly the loop point for the duplicated content to reset smoothly
-      setScrollPos((prev) => (prev + 2) % 500); 
-    }, 50);
+      // Speed: 3px every 30ms (~100px/s)
+      // Reset at 800px to ensure the single set clears the screen before restarting
+      setScrollPos((prev) => {
+        const next = prev + 3;
+        return next > 800 ? 0 : next;
+      }); 
+    }, 30);
 
     return () => clearInterval(interval);
   }, [isPaused]);
@@ -46,14 +54,13 @@ export const GamePopup: React.FC<GamePopupProps> = ({ friend, onClose, onWin, on
   const handlePrevSet = (e: React.MouseEvent) => {
     e.stopPropagation();
     setCurrentSet((prev) => (prev - 1 + spriteSets.length) % spriteSets.length);
-    // Optional: Reset scroll position on change, or keep it flowing
-    // setScrollPos(0); 
+    setScrollPos(0); // Reset scroll on set change
   };
 
   const handleNextSet = (e: React.MouseEvent) => {
     e.stopPropagation();
     setCurrentSet((prev) => (prev + 1) % spriteSets.length);
-    // setScrollPos(0);
+    setScrollPos(0); // Reset scroll on set change
   };
 
   return (
@@ -104,11 +111,11 @@ export const GamePopup: React.FC<GamePopupProps> = ({ friend, onClose, onWin, on
            <div className="absolute inset-0 border-[5px] border-black pointer-events-none z-10"></div>
            <div className="absolute inset-[5px] border-[2px] border-white pointer-events-none z-10"></div>
 
-           {/* Blinking Instruction / Hint */}
-           <div className={`z-20 bg-black px-3 py-1 border-2 border-yellow-400 mt-2 max-w-full text-center transition-all ${showHint ? 'animate-none' : 'animate-pulse'}`}>
+           {/* Blinking Instruction / Topic */}
+           <div className={`z-20 bg-black px-3 py-1 border-2 border-yellow-400 mt-2 max-w-full text-center transition-all ${showTopic ? 'animate-none' : 'animate-pulse'}`}>
               <span className="text-[#FFD740] text-[10px] uppercase tracking-widest leading-relaxed">
-                 {showHint 
-                    ? hintMessages[currentSet] 
+                 {showTopic 
+                    ? topicMessages[currentSet] 
                     : (isPaused ? ">>> RELEASE 2 GO <<<" : ">>> TAP 2 PAUSE <<<")
                  }
               </span>
@@ -123,23 +130,19 @@ export const GamePopup: React.FC<GamePopupProps> = ({ friend, onClose, onWin, on
                     left: '100%', // Start off-screen right
                 }}
               >
-                 {/* Repeat set multiple times for seamless feel */}
-                 {[...spriteSets[currentSet], ...spriteSets[currentSet], ...spriteSets[currentSet]].map((s, i) => (
+                 {/* Single set for loop-once-then-restart behavior */}
+                 {spriteSets[currentSet].map((s, i) => (
                     <PixelSprite key={`${currentSet}-${i}`} emoji={s} size={56} />
                  ))}
               </div>
-
-              {/* Paused Overlay Effect */}
-              {isPaused && (
-                  <div className="absolute inset-0 bg-black/40 backdrop-grayscale z-0 pointer-events-none"></div>
-              )}
            </div>
 
            {/* Set Pagination Controls */}
            <div className="absolute bottom-4 left-0 w-full px-6 flex justify-between items-center z-30">
               <button 
                 onClick={handlePrevSet}
-                className="w-10 h-10 bg-black border-2 border-white/50 rounded flex items-center justify-center text-white active:scale-90 transition-transform shadow-[2px_2px_0_0_rgba(0,0,0,0.5)]"
+                disabled={spriteSets.length <= 1}
+                className="w-10 h-10 bg-black border-2 border-white/50 rounded flex items-center justify-center text-white active:scale-90 transition-transform shadow-[2px_2px_0_0_rgba(0,0,0,0.5)] disabled:opacity-50"
               >
                  <ChevronLeft size={24} strokeWidth={3} />
               </button>
@@ -152,24 +155,11 @@ export const GamePopup: React.FC<GamePopupProps> = ({ friend, onClose, onWin, on
 
               <button 
                 onClick={handleNextSet}
-                className="w-10 h-10 bg-black border-2 border-white/50 rounded flex items-center justify-center text-white active:scale-90 transition-transform shadow-[2px_2px_0_0_rgba(0,0,0,0.5)]"
+                disabled={spriteSets.length <= 1}
+                className="w-10 h-10 bg-black border-2 border-white/50 rounded flex items-center justify-center text-white active:scale-90 transition-transform shadow-[2px_2px_0_0_rgba(0,0,0,0.5)] disabled:opacity-50"
               >
                  <ChevronRight size={24} strokeWidth={3} />
               </button>
-           </div>
-        </div>
-
-        {/* PROGRESS BAR */}
-        <div className="h-[60px] bg-black flex items-center px-4 gap-4 border-b-[4px] border-black">
-           <span className="text-[#FFD740] text-[11px] shrink-0">LEVEL 1/2</span>
-           <div className="flex-1 h-[24px] bg-[#333] border-[2px] border-white relative p-1">
-              <div 
-                className="h-full bg-[#FFD740]" 
-                style={{ width: '60%' }}
-              >
-                 {/* Pixel texture on bar */}
-                 <div className="w-full h-full opacity-20 bg-[url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAIklEQVQIW2NkQAKrVq36zwjjgzhhZWGMYAEYB8RmROaABADeOQ8CXl/xfgAAAABJRU5ErkJggg==')]"></div>
-              </div>
            </div>
         </div>
 
@@ -186,11 +176,11 @@ export const GamePopup: React.FC<GamePopupProps> = ({ friend, onClose, onWin, on
            
            <div className="flex gap-3 h-[56px]">
               <button 
-                onClick={() => setShowHint(!showHint)}
-                className={`flex-1 border-[4px] border-black shadow-[4px_4px_0_0_#000] active:translate-y-1 active:shadow-none transition-all flex items-center justify-center gap-2 ${showHint ? 'bg-white' : 'bg-[#FFD740]'}`}
+                onClick={() => setShowTopic(!showTopic)}
+                className={`flex-1 border-[4px] border-black shadow-[4px_4px_0_0_#000] active:translate-y-1 active:shadow-none transition-all flex items-center justify-center gap-2 ${showTopic ? 'bg-white' : 'bg-[#FFD740]'}`}
               >
-                 <Lightbulb size={20} color="black" strokeWidth={3} />
-                 <span className="text-[12px] font-bold text-black">HINT</span>
+                 <Tag size={20} color="black" strokeWidth={3} />
+                 <span className="text-[12px] font-bold text-black">TOPIC</span>
               </button>
 
               <button 

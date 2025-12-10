@@ -26,6 +26,9 @@ export interface Message {
   type: MessageType;
   text?: string;
   emojis?: string[];
+  topic?: string;
+  difficulty?: string;
+  points?: number;
   time: string;
   score?: string;
   status?: string; // e.g. "READ"

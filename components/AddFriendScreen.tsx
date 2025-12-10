@@ -34,6 +34,7 @@ export const AddFriendScreen: React.FC<AddFriendScreenProps> = ({ onBack, onAddF
   // Scanner States
   const [isScanning, setIsScanning] = useState(false);
   const [cameraError, setCameraError] = useState(false);
+  const [permissionDenied, setPermissionDenied] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   // Debounced search effect
@@ -90,9 +91,19 @@ export const AddFriendScreen: React.FC<AddFriendScreenProps> = ({ onBack, onAddF
     const startCamera = async () => {
       try {
         setCameraError(false);
+        setPermissionDenied(false);
+
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            throw new Error("Camera API not available");
+        }
+
         try {
              stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        } catch (e) {
+        } catch (e: any) {
+             // If permission explicitly denied, do not retry
+             if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
+                 throw e;
+             }
              console.log("Specific constraint failed, trying basic video", e);
              stream = await navigator.mediaDevices.getUserMedia({ video: true });
         }
@@ -102,9 +113,14 @@ export const AddFriendScreen: React.FC<AddFriendScreenProps> = ({ onBack, onAddF
         } else if (!mounted && stream) {
            stream.getTracks().forEach(track => track.stop());
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error("Error accessing camera:", err);
-        if (mounted) setCameraError(true);
+        if (mounted) {
+            setCameraError(true);
+            if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                setPermissionDenied(true);
+            }
+        }
       }
     };
 
@@ -148,9 +164,30 @@ export const AddFriendScreen: React.FC<AddFriendScreenProps> = ({ onBack, onAddF
 
   const clearSearch = () => setSearchText('');
 
-  const handleShareCode = () => {
-      // Mock share action
-      alert("MY CODE 'VB-USER' COPIED TO CLIPBOARD!");
+  const handleShareCode = async () => {
+      const uniqueCode = currentUserId 
+        ? `VB-${currentUserId.slice(0, 5).toUpperCase()}`
+        : 'VB-GUEST';
+        
+      if (navigator.share) {
+          try {
+              await navigator.share({
+                  title: 'VibeBites Invite',
+                  text: `Let's vibe! Add me on VibeBites with code: ${uniqueCode}`,
+                  url: window.location.origin
+              });
+          } catch (err) {
+              console.log('Share canceled', err);
+          }
+      } else {
+          // Fallback for desktop/unsupported browsers
+          if (navigator.clipboard) {
+              await navigator.clipboard.writeText(uniqueCode);
+              alert(`CODE ${uniqueCode} COPIED TO CLIPBOARD!`);
+          } else {
+              alert(`YOUR CODE IS: ${uniqueCode}`);
+          }
+      }
   };
 
   const handleSearchCode = () => {
@@ -356,7 +393,11 @@ export const AddFriendScreen: React.FC<AddFriendScreenProps> = ({ onBack, onAddF
                 {cameraError ? (
                     <div className="w-full h-full flex flex-col items-center justify-center text-white p-8 text-center bg-[#111]">
                         <CameraOff size={48} className="mb-4 text-[#FF5252]" />
-                        <p className="text-[12px] mb-6 leading-relaxed">CAMERA ACCESS FAILED.<br/>CHECK PERMISSIONS.</p>
+                        <p className="text-[12px] mb-6 leading-relaxed">
+                            {permissionDenied 
+                                ? "PERMISSION DENIED.\nENABLE CAMERA IN BROWSER SETTINGS." 
+                                : "CAMERA ACCESS FAILED.\nCHECK PERMISSIONS."}
+                        </p>
                         <button onClick={handleStopScanning} className="bg-white text-black px-6 py-3 border-4 border-black shadow-[4px_4px_0_0_white] text-[12px] font-bold active:translate-y-1 active:shadow-none transition-all">
                             CLOSE
                         </button>
