@@ -42,8 +42,10 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
 
     if (error) {
         console.error("Error fetching messages", error);
-        if (chatMessages.length === 0) setChatMessages(initialMessages);
-    } else if (data && data.length > 0) {
+        // Do not overwrite with mocks if we have a real fetch attempt, 
+        // unless initialMessages has content (which it usually doesn't for new real chats)
+        if (initialMessages.length > 0 && chatMessages.length === 0) setChatMessages(initialMessages);
+    } else if (data) {
         const formatted: Message[] = data.map((m: any) => ({
             id: m.id,
             type: m.sender_id === currentUserId ? MessageType.OUTGOING : MessageType.INCOMING_UNSOLVED,
@@ -60,9 +62,10 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
   };
 
   const subscribeToMessages = (currentUserId: string) => {
-    // Listen for new messages where receiver is me and sender is friend
+    // We subscribe to all INSERTs on the messages table where receiver_id is ME.
+    // We then filter inside the callback to ensure it's from the current FRIEND.
     const subscription = supabase
-      .channel(`chat:${currentUserId}:${friend.id}`)
+      .channel(`chat_global_${currentUserId}`) 
       .on('postgres_changes', { 
           event: 'INSERT', 
           schema: 'public', 

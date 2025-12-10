@@ -32,6 +32,9 @@ const App: React.FC = () => {
   const [currentUserSeed, setCurrentUserSeed] = useState('currentUser_player1');
   const [currentUserBgColor, setCurrentUserBgColor] = useState('#b6e3f4');
 
+  // Scanner state
+  const [startScanning, setStartScanning] = useState(false);
+
   useEffect(() => {
     // Check active session
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -299,11 +302,18 @@ const App: React.FC = () => {
   };
   
   const handleAddFriendClick = () => {
+      setStartScanning(false);
+      setCurrentScreen('addFriend');
+  };
+
+  const handleScanQRClick = () => {
+      setStartScanning(true);
       setCurrentScreen('addFriend');
   };
   
   const handleAddFriendBack = () => {
       setCurrentScreen('home');
+      setStartScanning(false); // Reset to ensure next open is fresh
   };
 
   const handleGameSuccess = () => {
@@ -360,7 +370,7 @@ const App: React.FC = () => {
                 <EmptyStateScreen 
                     onAddFriend={handleAddFriendClick}
                     onInvite={handleInviteClick}
-                    onScanQR={handleAddFriendClick} 
+                    onScanQR={handleScanQRClick} 
                     onSettings={handleSettingsClick}
                 />
             ) : (
@@ -483,6 +493,7 @@ const App: React.FC = () => {
                 onBack={handleAddFriendBack} 
                 onAddFriend={handleAddNewFriend}
                 currentUserId={session?.user?.id}
+                startScanning={startScanning}
             />
         )}
         
