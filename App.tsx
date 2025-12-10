@@ -150,9 +150,28 @@ const App: React.FC = () => {
     await supabase.auth.signOut();
   };
 
-  const handleClearData = () => {
+  const handleClearData = async () => {
+      const confirmDelete = window.confirm("DELETE ALL HISTORY? THIS CANNOT BE UNDONE!");
+      if (!confirmDelete) return;
+
+      // Optimistic Update
       setFriends([]);
       setCurrentScreen('home');
+
+      if (session) {
+          const userId = session.user.id;
+          try {
+              // Delete all messages involved with user
+              await supabase.from('messages').delete().or(`sender_id.eq.${userId},receiver_id.eq.${userId}`);
+              
+              // Delete all friendships involved with user
+              await supabase.from('friendships').delete().or(`user_id.eq.${userId},friend_id.eq.${userId}`);
+              
+              console.log("Data cleared from Supabase");
+          } catch (e) {
+              console.error("Error clearing cloud data:", e);
+          }
+      }
   };
 
   const handleFriendClick = (friend: Friend) => {
@@ -162,11 +181,31 @@ const App: React.FC = () => {
 
   const handleDeleteConversation = async (e: React.MouseEvent, friendId: string | number) => {
       e.stopPropagation();
+      
+      const confirmDelete = window.confirm("REMOVE FRIEND & DELETE CHAT?");
+      if (!confirmDelete) return;
+
       // Optimistic update
       setFriends(prev => prev.filter(f => f.id !== friendId));
       
-      // DB deletion logic would go here (delete from friendships)
-      // await supabase.from('friendships').delete()...
+      if (session) {
+           const isUUID = (id: string | number) => {
+                if (typeof id !== 'string') return false;
+                const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+                return uuidRegex.test(id);
+            };
+
+            if (isUUID(friendId)) {
+                // Delete friendship in DB (Messages usually cascade delete or can remain orphan depending on schema, 
+                // but here we just break the link)
+                const { error } = await supabase
+                    .from('friendships')
+                    .delete()
+                    .or(`and(user_id.eq.${session.user.id},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${session.user.id})`);
+
+                if (error) console.error("Error deleting friend from DB:", error);
+            }
+      }
   };
 
   const handleAddNewFriend = async (newFriend: Friend) => {
