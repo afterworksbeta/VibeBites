@@ -11,6 +11,7 @@ interface ProfileScreenProps {
   onEditProfile?: () => void;
   currentSeed?: string;
   currentBgColor?: string;
+  username?: string;
 }
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({ 
@@ -19,7 +20,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onInviteClick, 
   onEditProfile,
   currentSeed = "currentUser_player1",
-  currentBgColor
+  currentBgColor,
+  username = "PLAYER"
 }) => {
 
   const handleAvatarClick = () => {
@@ -86,7 +88,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         {/* Username */}
         <div className="relative bg-[#FFD740] border-[4px] border-black px-4 py-2 shadow-[4px_4px_0_0_#000000] mb-3">
              <div className="absolute inset-[2px] border-[2px] border-white pointer-events-none"></div>
-             <h1 className="text-[18px] text-black uppercase relative z-10">PLAYER_X123</h1>
+             <h1 className="text-[18px] text-black uppercase relative z-10">{username}</h1>
         </div>
 
         {/* Level Tag */}

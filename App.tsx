@@ -457,6 +457,7 @@ const App: React.FC = () => {
                 onEditProfile={handleEditProfile}
                 currentSeed={currentUserSeed}
                 currentBgColor={currentUserBgColor}
+                username={currentUsername}
             />
         )}
         
