@@ -1,9 +1,10 @@
+
 import React, { useState } from 'react';
 import { ArrowLeft, Rocket, Loader, RefreshCw, Star, Tag, Trophy, Lightbulb } from 'lucide-react';
 import { COLORS } from '../constants';
 import { PixelAvatar } from './PixelAvatar';
 import { Friend } from '../types';
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { supabase } from '../lib/supabaseClient';
 
 interface ComposeScreenProps {
@@ -48,32 +49,64 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
           3. "topic": A very short 1 word category (e.g. ACTIVITY, FOOD).
           4. "difficulty": "EASY", "MEDIUM", or "HARD".
           5. "points": Integer estimate between 50-200 based on difficulty.
-          
-          Return ONLY valid JSON.
         `;
 
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
-            config: { responseMimeType: 'application/json' }
+            config: { 
+                responseMimeType: 'application/json',
+                // Strict schema ensures consistent JSON structure
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        emojis: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        hint: { type: Type.STRING },
+                        topic: { type: Type.STRING },
+                        difficulty: { type: Type.STRING }, // Use string then cast to enum manually to be safe
+                        points: { type: Type.NUMBER }
+                    }
+                }
+            }
         });
 
-        const output = response.text || "{}";
-        const result = JSON.parse(output) as VibeAnalysis;
+        let output = response.text || "{}";
+        
+        // Critical Fix: Strip Markdown if AI adds it (e.g. ```json ... ```)
+        output = output.replace(/```json/g, '').replace(/```/g, '').trim();
+
+        const result = JSON.parse(output) as any;
         
         if (result && result.emojis) {
-            // Fallback if AI forgets hint field
-            if (!result.hint) result.hint = "GUESS THE VIBE!";
-            setAnalysis(result);
+            // Validate & Normalize fields
+            const normalized: VibeAnalysis = {
+                emojis: result.emojis,
+                hint: result.hint || "GUESS THE VIBE!",
+                topic: result.topic || "MYSTERY",
+                difficulty: (result.difficulty?.toUpperCase() === 'HARD' || result.difficulty?.toUpperCase() === 'EASY') ? result.difficulty.toUpperCase() : 'MEDIUM',
+                points: result.points || 100
+            };
+            
+            setAnalysis(normalized);
             setShowPreview(true);
         } else {
             throw new Error("Invalid format");
         }
     } catch (e) {
         console.error("Failed to generate vibe analysis", e);
+        
+        // Randomized Fallback to avoid "Same Emoji" bug appearance
+        const fallbackSets = [
+            { emojis: ["👾", "⚡", "❓"], topic: "MYSTERY" },
+            { emojis: ["🎲", "🕹️", "🎮"], topic: "GAME" },
+            { emojis: ["✨", "🔮", "🌙"], topic: "MAGIC" },
+            { emojis: ["🍕", "🍔", "🍟"], topic: "FOOD" }
+        ];
+        const randomFallback = fallbackSets[Math.floor(Math.random() * fallbackSets.length)];
+        
         setAnalysis({
-            emojis: ["👾", "⚡", "❓"],
-            topic: "MYSTERY",
+            emojis: randomFallback.emojis,
+            topic: randomFallback.topic,
             hint: "TRY TO GUESS!",
             difficulty: "MEDIUM",
             points: 100

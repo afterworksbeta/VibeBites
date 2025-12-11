@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
 import { COLORS } from '../constants';
 import { ArrowUp, Sparkles, RefreshCw, X, Loader } from 'lucide-react';
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 
 interface ChatInputProps {
   onSend: (text: string, emojis?: string[]) => void;
@@ -28,23 +29,36 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend }) => {
     try {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         
-        // Updated prompt to match ComposeScreen's "Vibe Game" logic
+        // Updated prompt with strict schema enforcement to prevent Markdown issues
         const prompt = `
           Analyze this message for a word-guessing game: "${text}"
           
           Return a JSON object with:
           "emojis": Array of 3-6 emojis that represent the message concepts sequentially or capture the "vibe" for a player to guess.
-          
-          Return ONLY valid JSON.
         `;
 
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
-            config: { responseMimeType: 'application/json' }
+            config: { 
+                responseMimeType: 'application/json',
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        emojis: {
+                            type: Type.ARRAY,
+                            items: { type: Type.STRING }
+                        }
+                    }
+                }
+            }
         });
 
-        const output = response.text || "{}";
+        let output = response.text || "{}";
+        
+        // Critical Fix: Strip Markdown code blocks if present (common cause of JSON.parse failure)
+        output = output.replace(/```json/g, '').replace(/```/g, '').trim();
+
         const result = JSON.parse(output);
         const emojis = result.emojis || [];
         
@@ -52,13 +66,20 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend }) => {
             setGeneratedEmojis(emojis);
             setShowPreview(true);
         } else {
-             // Fallback
              throw new Error("No emojis returned");
         }
     } catch (e) {
         console.error("Failed to generate emojis", e);
-        // Simple local fallback if AI fails
-        setGeneratedEmojis(["👾", "⚡", "❓"]);
+        // Robust Fallback: Randomize fallbacks so it doesn't look broken/repetitive
+        const fallbackSets = [
+            ["👾", "⚡", "❓"],
+            ["✨", "🎲", "🎯"],
+            ["🔥", "🕹️", "🧩"],
+            ["🤔", "👀", "💭"],
+            ["🌈", "🦄", "💖"]
+        ];
+        const randomSet = fallbackSets[Math.floor(Math.random() * fallbackSets.length)];
+        setGeneratedEmojis(randomSet);
         setShowPreview(true);
     } finally {
         setLoading(false);
