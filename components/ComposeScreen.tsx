@@ -41,30 +41,32 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
     try {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         
-        // PROMPT ENGINEERING: REBUS PUZZLE LOGIC
-        // This prompts the AI to act as a puzzle designer, not just a translator.
+        // UPDATED PROMPT: PRIORITIZE LITERAL MEANING
         const prompt = `
-          Act as a Rebus Puzzle Designer.
+          Act as a Emoji Translator for a guessing game.
           Target Word/Phrase: "${text}"
           
-          TASK: Create a sequence of 3-6 emojis that allows a player to guess "${text}" exactly.
+          TASK: Generate a sequence of emojis (1-5 emojis) that represents "${text}" MOST CLEARLY.
           
-          CRITICAL RULES:
-          1. CONCRETE OVER ABSTRACT: Do not use generic smiley faces. Use physical objects.
-             - Bad: "Happy" -> 😄
-             - Good: "Happy" -> 🎉 (Party) or 🎁 (Gift)
-          2. BREAK IT DOWN: If the word is complex, break it into syllables or component words.
-             - Example: "Hotdog" -> 🔥 (Hot) + 🐶 (Dog)
-             - Example: "Sunflower" -> ☀️ (Sun) + 🌼 (Flower)
-          3. DIRECT ASSOCIATION: The emojis must visually suggest the answer words.
+          PRIORITY RULES:
+          1. LITERAL TRANSLATION IS KING: If the word has a direct emoji, USE IT FIRST.
+             - "Hi" / "Hello" -> 👋
+             - "Love" -> ❤️
+             - "Cat" -> 🐱
+          2. ACTION/VERB MAPPING: Use the emoji that shows the action.
+             - "Run" -> 🏃
+             - "Sleep" -> 😴
+          3. REBUS/COMBINATION: Only use combinations if a single emoji isn't enough to describe the object.
+             - "Hot Dog" -> 🔥 + 🐶
+          4. NO ABSTRACT NONSENSE: Do not use arrows for "High" unless the word is "Up". Do not use Eye for "I".
           
           OUTPUT FORMAT (JSON):
           {
-            "emojis": ["🔥", "🐶"],
-            "hint": "A ballpark snack", (Max 4 words, specific clue)
-            "topic": "FOOD", (Single word category)
+            "emojis": ["👋"],
+            "hint": "A common greeting", (Max 4 words)
+            "topic": "SOCIAL", (Single word category)
             "difficulty": "EASY", (EASY = direct visual, HARD = requires thinking)
-            "points": 100
+            "points": 50
           }
         `;
 
@@ -87,10 +89,9 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
         });
 
         let output = response.text || "{}";
-        // Clean potential markdown formatting
         output = output.replace(/```json/g, '').replace(/```/g, '').trim();
 
-        console.log("[ComposeScreen] AI Raw Output:", output); // Debug log
+        console.log("[ComposeScreen] AI Raw Output:", output);
 
         const result = JSON.parse(output) as any;
         
@@ -111,18 +112,10 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
     } catch (e) {
         console.error("Failed to generate vibe analysis", e);
         
-        // Fallback if AI fails - Randomized so it doesn't look broken
-        const fallbackSets = [
-            { emojis: ["👾", "⚡", "❓"], topic: "MYSTERY" },
-            { emojis: ["🎲", "🕹️", "🎮"], topic: "GAME" },
-            { emojis: ["✨", "🔮", "🌙"], topic: "MAGIC" },
-            { emojis: ["🍕", "🍔", "🍟"], topic: "FOOD" }
-        ];
-        const randomFallback = fallbackSets[Math.floor(Math.random() * fallbackSets.length)];
-        
+        // Fallback
         setAnalysis({
-            emojis: randomFallback.emojis,
-            topic: randomFallback.topic,
+            emojis: ["❓", "👋", "✨"],
+            topic: "MYSTERY",
             hint: "TRY TO GUESS!",
             difficulty: "MEDIUM",
             points: 100

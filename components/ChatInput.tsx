@@ -29,18 +29,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend }) => {
     try {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         
-        // REBUS PROMPT FOR QUICK CHAT
+        // DIRECT & LITERAL PROMPT FOR QUICK CHAT
         const prompt = `
-          Task: Create a Rebus Puzzle (Picture Words) for the text: "${text}"
+          Task: Convert the text "${text}" into Emojis.
           
-          Rules:
-          1. Use concrete visual emojis (Objects/Animals/Actions).
-          2. Avoid abstract faces (No 😄, 😢, 😠 unless the text is literally about an emotion).
-          3. If the word is "Ice Cream", use 🍦. If "I scream", use 👁️ + 😱.
-          4. Sequence must follow the order of words/syllables.
+          RULES:
+          1. USE DIRECT MEANING FIRST:
+             - "Hi" -> ["👋"] (Waving Hand)
+             - "Love" -> ["❤️"]
+             - "Funny" -> ["😂"]
+          2. DO NOT USE ABSTRACT PUZZLES unless the word is complex.
+             - "Hi" MUST be 👋, NOT "High (⬆️)" or "Eye (👁️)".
+             - "Cool" -> 😎 (Face), NOT ❄️ (Snow) unless it literally means cold.
+          3. Keep it short (1-4 emojis).
           
           Return JSON:
-          { "emojis": ["👁️", "😱"] }
+          { "emojis": ["👋"] }
         `;
 
         const response = await ai.models.generateContent({
@@ -76,7 +80,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend }) => {
         }
     } catch (e) {
         console.error("Failed to generate emojis", e);
-        // Robust Fallback - Randomized
+        // Robust Fallback
         const fallbackSets = [
             ["👾", "⚡", "❓"],
             ["✨", "🎲", "🎯"],
