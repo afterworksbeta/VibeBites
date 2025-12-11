@@ -63,9 +63,8 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
         }
     }
 
-    // Prefer created_at as it is standard Supabase timestamp. 
-    // Falls back to sent_at if created_at is missing (unlikely).
-    const timeSource = m.created_at || m.sent_at;
+    // Use sent_at as the source of truth for time (database schema compliance)
+    const timeSource = m.sent_at;
 
     return {
         id: m.id,
@@ -97,12 +96,12 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
         // Use exact formatting for Supabase/PostgREST
         const filter = `and(sender_id.eq.${currentUserId},receiver_id.eq.${friend.id}),and(sender_id.eq.${friend.id},receiver_id.eq.${currentUserId})`;
 
-        // Use created_at for sorting as it's guaranteed by Supabase defaults
+        // Use sent_at for sorting (Schema Fix: created_at does not exist)
         const { data, error } = await supabase
             .from('messages')
             .select('*')
             .or(filter)
-            .order('created_at', { ascending: true });
+            .order('sent_at', { ascending: true });
 
         if (error) {
             console.error("[ChatScreen] ❌ Error fetching messages (Detail):", JSON.stringify(error, null, 2));
@@ -279,7 +278,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
         console.log("[ChatScreen] Sending to DB...", { receiver: friend.id });
 
         // Insert - ensure we use columns that definitely exist
-        // Note: We use created_at implicitly (default now())
+        // Use sent_at instead of creating default
         const { data, error } = await supabase
             .from('messages')
             .insert({
@@ -287,7 +286,6 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
                 receiver_id: friend.id,
                 original_text: jsonPayload,
                 emoji_sequences: emojis || [],
-                // We attempt to send sent_at, but if it fails, the trigger or default created_at will save us
                 sent_at: currentIsoTime 
             })
             .select()
