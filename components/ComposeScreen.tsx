@@ -67,7 +67,6 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
         }
     } catch (e) {
         console.error("Failed to generate vibe analysis", e);
-        // Fallback
         setAnalysis({
             emojis: ["👾", "⚡", "❓"],
             topic: "MYSTERY",
@@ -86,43 +85,55 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
 
   const handleSend = async () => {
     if (!text || !analysis) return;
+    
+    console.log("[ComposeScreen] Starting send...", { text, analysis });
     setSending(true);
 
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (user) {
-        // WORKAROUND: Pack metadata into 'text' column as JSON
-        // This avoids "column does not exist" errors if 'emojis', 'topic', etc. are missing in DB schema.
-        const packedPayload = JSON.stringify({
-            text: text,
-            emojis: analysis.emojis,
-            topic: analysis.topic,
-            difficulty: analysis.difficulty,
-            points: analysis.points
-        });
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (user) {
+            // WORKAROUND: Pack metadata into 'original_text' column as JSON
+            const packedPayload = JSON.stringify({
+                text: text,
+                emojis: analysis.emojis,
+                topic: analysis.topic,
+                difficulty: analysis.difficulty,
+                points: analysis.points,
+                status: 'SENT',
+                type: 'INCOMING_UNSOLVED'
+            });
+            const currentIsoTime = new Date().toISOString();
+            
+            console.log("[ComposeScreen] Insert Payload:", packedPayload);
 
-        const { error } = await supabase.from('messages').insert({
-            sender_id: user.id,
-            receiver_id: friend.id,
-            text: packedPayload, // Store JSON string here
-            // emojis: analysis.emojis, // REMOVED to prevent schema error
-            type: 'INCOMING_UNSOLVED', 
-            status: 'SENT'
-        });
+            // Insert into 'messages' using correct schema columns
+            const { error } = await supabase.from('messages').insert({
+                sender_id: user.id,
+                receiver_id: friend.id,
+                original_text: packedPayload, // Changed from 'text'
+                emoji_sequences: analysis.emojis, // Added NOT NULL column
+                sent_at: currentIsoTime, // Added for sorting
+                difficulty_level: analysis.difficulty.toLowerCase() // Optional schema match
+            });
 
-        if (error) {
-            // Improved error logging
-            console.error("Send failed", error.message || JSON.stringify(error));
-            alert("SEND FAILED: " + (error.message || "Unknown Error")); 
-            // Don't go back if failed, so user can retry
-        } else {
+            if (error) {
+                console.error("[ComposeScreen] Supabase Error:", error);
+                throw error;
+            }
+
+            console.log("[ComposeScreen] Send Success!");
             onBack();
+        } else {
+            console.log("[ComposeScreen] No user logged in, mock success");
+            setTimeout(() => onBack(), 1000);
         }
-    } else {
-        // Fallback demo mode
-        setTimeout(() => onBack(), 1000);
+    } catch (e: any) {
+        console.error("[ComposeScreen] Send Failed Exception:", e);
+        alert(`SEND ERROR: ${e.message || 'Unknown database error'}. Check console for details.`);
+    } finally {
+        setSending(false);
     }
-    setSending(false);
   };
 
   const renderStars = (diff: string) => {
@@ -159,7 +170,6 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
           <PixelAvatar seed={friend.avatarSeed} size={40} borderWidth={3} />
         </div>
         
-        {/* Placeholder to balance layout */}
         <div className="w-8" />
       </div>
 
@@ -168,18 +178,14 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
         className="flex-1 flex flex-col p-6 overflow-y-auto"
         style={{ backgroundColor: COLORS.PINK }}
       >
-        
-        {/* TITLE BANNER */}
         <div 
           className="w-full py-3 mb-6 relative border-4 border-black text-center shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
           style={{ backgroundColor: COLORS.YELLOW }}
         >
-          {/* Inner white border effect */}
           <div className="absolute inset-1 border-2 border-white pointer-events-none"></div>
           <h2 className="text-black text-[14px] uppercase relative z-10">WHAT'S UR VIBE?</h2>
         </div>
 
-        {/* INPUT AREA */}
         <div className="relative mb-4">
            <textarea
              value={text}
@@ -189,9 +195,7 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
            />
         </div>
 
-        {/* CONTROLS ROW */}
         <div className="flex justify-between items-center mb-6">
-          {/* COUNTER */}
           <div 
             className="px-3 py-2 border-[3px] border-black flex items-center shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] bg-[#FFD740]"
           >
@@ -201,7 +205,6 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
             <span className="text-black text-[12px]">/{MAX_CHARS}</span>
           </div>
 
-          {/* PREVIEW BUTTON */}
           <button 
              onClick={handlePreview}
              disabled={loading || text.length === 0}
@@ -217,12 +220,10 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
           </button>
         </div>
 
-        {/* INLINE PREVIEW CARD (Improved Sender Flow) */}
         {showPreview && analysis && (
             <div className="mb-4 animate-in fade-in slide-in-from-top-4 duration-300">
                 <div className="bg-[#333] border-[4px] border-black p-0 relative shadow-[6px_6px_0_0_black]">
                      
-                     {/* Preview Header */}
                      <div className="bg-black p-2 flex justify-between items-center border-b-[4px] border-black">
                          <span className="text-white text-[10px] uppercase">EMOJI PREVIEW:</span>
                          <button onClick={handleRegenerate} className="text-[#FFD740] hover:text-white">
@@ -231,16 +232,13 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
                      </div>
 
                      <div className="p-4">
-                        {/* Emojis */}
                         <div className="flex flex-wrap justify-center gap-4 mb-6">
                              {analysis.emojis.map((emoji, i) => (
                                  <span key={i} className="text-[32px] md:text-[40px] filter drop-shadow-[4px_4px_0_rgba(0,0,0,0.5)] hover:scale-110 transition-transform cursor-default animate-bounce" style={{ animationDelay: `${i * 0.1}s` }}>{emoji}</span>
                              ))}
                         </div>
 
-                        {/* Analysis Grid */}
                         <div className="grid grid-cols-2 gap-3 mb-4">
-                            {/* Topic */}
                             <div className="bg-[#444] p-2 border-[2px] border-black rounded flex flex-col items-center">
                                 <div className="flex items-center gap-1 mb-1">
                                     <Tag size={10} color="#FFD740" />
@@ -249,7 +247,6 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
                                 <span className="text-white text-[10px] uppercase font-bold text-center">{analysis.topic}</span>
                             </div>
 
-                            {/* Difficulty */}
                             <div className="bg-[#444] p-2 border-[2px] border-black rounded flex flex-col items-center">
                                 <div className="flex items-center gap-1 mb-1">
                                     <span className="text-[#aaa] text-[8px] uppercase">DIFF</span>
@@ -261,7 +258,6 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
                             </div>
                         </div>
 
-                        {/* Points Estimate */}
                         <div className="bg-black/50 p-2 border-[2px] border-white/20 rounded flex justify-between items-center">
                             <span className="text-white text-[8px] uppercase">EST. POINTS:</span>
                             <div className="flex items-center gap-2">
@@ -274,7 +270,6 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
             </div>
         )}
 
-        {/* SEND BUTTON */}
         <button 
           onClick={handleSend}
           disabled={sending || !showPreview}
