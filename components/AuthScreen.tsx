@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { COLORS } from '../constants';
 import { PixelSprite } from './PixelSprite';
-import { Eye, EyeOff, Lock, ArrowRight, Loader, Check } from 'lucide-react';
+import { Eye, EyeOff, Lock, ArrowRight, Loader, Check, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 
 interface AuthScreenProps {
@@ -51,6 +51,32 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
     setErrorMsg('');
   };
 
+  const generateRandomUsername = () => {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Removed lookalikes like I,1,0,O
+      let randomStr = '';
+      for (let i = 0; i < 4; i++) {
+          randomStr += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return `PLAYER_${randomStr}`;
+  };
+
+  const checkUsernameAvailable = async (name: string): Promise<boolean> => {
+      const { data, error } = await supabase
+          .from('profiles')
+          .select('username')
+          .ilike('username', name) // Case insensitive check
+          .maybeSingle(); // Returns null if not found, object if found
+      
+      if (error && error.code !== 'PGRST116') {
+          console.error("Error checking username:", error);
+          // If error (network etc), assume available to let backend constraint handle it, or block.
+          // Blocking is safer to prevent UI confusion.
+          return false; 
+      }
+      
+      return !data; // If data exists, it's NOT available
+  };
+
   const handleSubmit = async () => {
     setLoading(true);
     setErrorMsg('');
@@ -73,16 +99,44 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
         if (error) throw error;
         onLogin();
       } else {
+        // REGISTRATION FLOW
+        
+        // 1. Determine Username
+        let finalUsername = username.trim().toUpperCase();
+        
+        if (!finalUsername) {
+            finalUsername = generateRandomUsername();
+        }
+
+        // 2. Pre-check availability
+        const available = await checkUsernameAvailable(finalUsername);
+        if (!available) {
+            // If user typed it, tell them. If generated, try one more time or fail.
+            if (username.trim()) {
+                throw new Error(`USERNAME '${finalUsername}' IS TAKEN.`);
+            } else {
+                // Regen once
+                finalUsername = generateRandomUsername();
+                const retryAvailable = await checkUsernameAvailable(finalUsername);
+                if (!retryAvailable) {
+                     throw new Error("COULD NOT GENERATE UNIQUE NAME. PLEASE TYPE ONE.");
+                }
+            }
+        }
+
+        // 3. Sign Up
         const { error } = await supabase.auth.signUp({
           email,
           password,
           options: {
             data: {
-              username: username || `PLAYER_${Math.floor(Math.random()*1000)}`,
+              username: finalUsername,
             },
           },
         });
+        
         if (error) throw error;
+        
         // Auto login handling or waiting for email confirmation depends on settings
         // For this demo, assuming auto-confirm or immediate login
         onLogin();
@@ -144,8 +198,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
         </div>
 
         {errorMsg && (
-          <div className="bg-red-500 border-4 border-black p-2 mb-4 text-white text-[10px] text-center">
-             {errorMsg}
+          <div className="bg-red-500 border-4 border-black p-2 mb-4 text-white text-[10px] text-center flex items-center gap-2 justify-center">
+             <AlertCircle size={16} />
+             <span>{errorMsg}</span>
           </div>
         )}
 
@@ -155,14 +210,15 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
             {/* Username (Register only) */}
             {!isLogin && (
                 <div className="flex flex-col gap-2">
-                    <label className="text-[10px] text-black">USERNAME:</label>
+                    <label className="text-[10px] text-black">USERNAME (UNIQUE):</label>
                     <input 
                         type="text" 
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
-                        placeholder="PLAYER_1"
+                        placeholder="LEAVE BLANK FOR AUTO"
                         className="h-[48px] bg-white border-[4px] border-black rounded-lg px-3 text-[12px] text-black outline-none focus:border-[#2196F3] transition-colors placeholder:text-gray-400 font-['Press_Start_2P'] uppercase"
                     />
+                    <span className="text-[8px] text-black/50">*MUST BE UNIQUE TO YOU</span>
                 </div>
             )}
 

@@ -31,7 +31,7 @@ const App: React.FC = () => {
   // State for current user
   const [currentUserSeed, setCurrentUserSeed] = useState('currentUser_player1');
   const [currentUserBgColor, setCurrentUserBgColor] = useState('#b6e3f4');
-  const [currentUsername, setCurrentUsername] = useState('PLAYER');
+  const [currentUsername, setCurrentUsername] = useState(''); // Initial empty to show loading
 
   // Scanner state
   const [startScanning, setStartScanning] = useState(false);
@@ -55,28 +55,48 @@ const App: React.FC = () => {
       setSession(session);
       if (session) {
         setCurrentScreen('home');
-        fetchProfile(session.user.id);
+        // Add a small delay/retry for profile fetch as DB trigger might be slightly delayed on signup
+        fetchProfileWithRetry(session.user.id);
         fetchFriends(session.user.id);
       } else {
         setCurrentScreen('auth');
         setFriends([]);
+        setCurrentUsername(''); // Reset on logout
       }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  const fetchProfile = async (userId: string) => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('username, avatar_seed, bg_color')
-      .eq('id', userId)
-      .single();
-    
-    if (data) {
-      if (data.username) setCurrentUsername(data.username);
-      if (data.avatar_seed) setCurrentUserSeed(data.avatar_seed);
-      if (data.bg_color) setCurrentUserBgColor(data.bg_color);
+  // Robust fetch with retries for new accounts
+  const fetchProfileWithRetry = async (userId: string, retries = 3) => {
+      let attempt = 0;
+      while (attempt < retries) {
+          const success = await fetchProfile(userId);
+          if (success) break;
+          attempt++;
+          // Wait 500ms before retry
+          if (attempt < retries) await new Promise(r => setTimeout(r, 500));
+      }
+  };
+
+  const fetchProfile = async (userId: string): Promise<boolean> => {
+    try {
+        const { data, error } = await supabase
+        .from('profiles')
+        .select('username, avatar_seed, bg_color')
+        .eq('id', userId)
+        .single();
+        
+        if (data) {
+        if (data.username) setCurrentUsername(data.username);
+        if (data.avatar_seed) setCurrentUserSeed(data.avatar_seed);
+        if (data.bg_color) setCurrentUserBgColor(data.bg_color);
+        return true;
+        }
+        return false;
+    } catch (e) {
+        return false;
     }
   };
 
