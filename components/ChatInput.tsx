@@ -29,16 +29,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend }) => {
     try {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         
-        // UPDATED PROMPT: Direct translation instead of "vibe"
+        // REBUS PROMPT FOR QUICK CHAT
         const prompt = `
-          Translate this text into emojis for a rebus puzzle: "${text}"
+          Task: Create a Rebus Puzzle (Picture Words) for the text: "${text}"
           
-          Goal: The player must guess the exact text "${text}" from the emojis.
-          Rule: Use LITERAL visual representations of the words (nouns/verbs). 
-          Example: "I love cats" -> [🤟, ❤️, 🐱]
+          Rules:
+          1. Use concrete visual emojis (Objects/Animals/Actions).
+          2. Avoid abstract faces (No 😄, 😢, 😠 unless the text is literally about an emotion).
+          3. If the word is "Ice Cream", use 🍦. If "I scream", use 👁️ + 😱.
+          4. Sequence must follow the order of words/syllables.
           
-          Return a JSON object with:
-          "emojis": Array of 3-6 emojis.
+          Return JSON:
+          { "emojis": ["👁️", "😱"] }
         `;
 
         const response = await ai.models.generateContent({
@@ -74,7 +76,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend }) => {
         }
     } catch (e) {
         console.error("Failed to generate emojis", e);
-        // Robust Fallback
+        // Robust Fallback - Randomized
         const fallbackSets = [
             ["👾", "⚡", "❓"],
             ["✨", "🎲", "🎯"],

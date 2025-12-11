@@ -41,24 +41,31 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
     try {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         
-        // UPDATED PROMPT: Enforce literal meaning for guessing accuracy
+        // PROMPT ENGINEERING: REBUS PUZZLE LOGIC
+        // This prompts the AI to act as a puzzle designer, not just a translator.
         const prompt = `
-          You are a game engine for a word-guessing game.
-          Target Answer: "${text}"
+          Act as a Rebus Puzzle Designer.
+          Target Word/Phrase: "${text}"
           
-          Your task: Generate a sequence of emojis that act as a DIRECT VISUAL PUZZLE for the player to guess the Target Answer exactly.
+          TASK: Create a sequence of 3-6 emojis that allows a player to guess "${text}" exactly.
           
-          Rules:
-          1. Emojis must LITERALLY represent the nouns, verbs, or concepts in the text.
-          2. Do NOT use abstract "vibes". Use specific objects. (e.g. if text is "Pizza Party", use [🍕, 🎉], do not use [😋, ✨]).
-          3. Sequence must follow the word order of the text.
+          CRITICAL RULES:
+          1. CONCRETE OVER ABSTRACT: Do not use generic smiley faces. Use physical objects.
+             - Bad: "Happy" -> 😄
+             - Good: "Happy" -> 🎉 (Party) or 🎁 (Gift)
+          2. BREAK IT DOWN: If the word is complex, break it into syllables or component words.
+             - Example: "Hotdog" -> 🔥 (Hot) + 🐶 (Dog)
+             - Example: "Sunflower" -> ☀️ (Sun) + 🌼 (Flower)
+          3. DIRECT ASSOCIATION: The emojis must visually suggest the answer words.
           
-          Return JSON:
-          1. "emojis": Array of 3-6 emojis.
-          2. "hint": A specific clue describing the context or category (e.g. "Italian Food", "Weekend Activity"). Max 4 words. Do NOT include the answer words.
-          3. "topic": A single UPPERCASE category word (e.g. FOOD, SPORT, WORK).
-          4. "difficulty": "EASY" (concrete objects), "MEDIUM" (actions/feelings), or "HARD" (abstract).
-          5. "points": 50-200.
+          OUTPUT FORMAT (JSON):
+          {
+            "emojis": ["🔥", "🐶"],
+            "hint": "A ballpark snack", (Max 4 words, specific clue)
+            "topic": "FOOD", (Single word category)
+            "difficulty": "EASY", (EASY = direct visual, HARD = requires thinking)
+            "points": 100
+          }
         `;
 
         const response = await ai.models.generateContent({
@@ -80,7 +87,10 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
         });
 
         let output = response.text || "{}";
+        // Clean potential markdown formatting
         output = output.replace(/```json/g, '').replace(/```/g, '').trim();
+
+        console.log("[ComposeScreen] AI Raw Output:", output); // Debug log
 
         const result = JSON.parse(output) as any;
         
@@ -101,6 +111,7 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
     } catch (e) {
         console.error("Failed to generate vibe analysis", e);
         
+        // Fallback if AI fails - Randomized so it doesn't look broken
         const fallbackSets = [
             { emojis: ["👾", "⚡", "❓"], topic: "MYSTERY" },
             { emojis: ["🎲", "🕹️", "🎮"], topic: "GAME" },
@@ -129,27 +140,23 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
   const handleSend = async () => {
     if (!text || !analysis) return;
     
-    console.log("[ComposeScreen] Starting send...", { text, analysis });
     setSending(true);
 
     try {
         const { data: { user } } = await supabase.auth.getUser();
         
         if (user) {
-            // WORKAROUND: Pack metadata into 'original_text' column as JSON
             const packedPayload = JSON.stringify({
                 text: text,
                 emojis: analysis.emojis,
                 topic: analysis.topic,
-                hint: analysis.hint, // Include the hint
+                hint: analysis.hint,
                 difficulty: analysis.difficulty,
                 points: analysis.points,
                 status: 'SENT',
                 type: 'INCOMING_UNSOLVED'
             });
             const currentIsoTime = new Date().toISOString();
-            
-            console.log("[ComposeScreen] Insert Payload:", packedPayload);
 
             const { error } = await supabase.from('messages').insert({
                 sender_id: user.id,
@@ -164,16 +171,14 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
                 console.error("[ComposeScreen] Supabase Error:", error);
                 throw error;
             }
-
-            console.log("[ComposeScreen] Send Success!");
             onBack();
         } else {
-            console.log("[ComposeScreen] No user logged in, mock success");
+             // Mock mode
             setTimeout(() => onBack(), 1000);
         }
     } catch (e: any) {
-        console.error("[ComposeScreen] Send Failed Exception:", e);
-        alert(`SEND ERROR: ${e.message || 'Unknown database error'}. Check console for details.`);
+        console.error("[ComposeScreen] Send Failed:", e);
+        alert("Sending failed. Please try again.");
     } finally {
         setSending(false);
     }
