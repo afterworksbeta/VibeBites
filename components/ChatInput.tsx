@@ -29,19 +29,23 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend }) => {
     try {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         
-        // DIRECT & LITERAL PROMPT FOR QUICK CHAT
+        // STRICT PROMPT: NO PHONETICS
         const prompt = `
-          Task: Convert the text "${text}" into Emojis.
+          Task: Convert "${text}" to Emojis by MEANING, NOT SOUND.
           
-          RULES:
-          1. USE DIRECT MEANING FIRST:
-             - "Hi" -> ["👋"] (Waving Hand)
+          STRICT RULES:
+          1. NO PHONETIC MATCHING:
+             - "Hi" is a greeting, NOT "High" (⬆️).
+             - "I" is self, NOT "Eye" (👁️).
+             
+          2. USE DIRECT TRANSLATION:
+             - "Hi" -> ["👋"]
+             - "Hello" -> ["👋"]
              - "Love" -> ["❤️"]
-             - "Funny" -> ["😂"]
-          2. DO NOT USE ABSTRACT PUZZLES unless the word is complex.
-             - "Hi" MUST be 👋, NOT "High (⬆️)" or "Eye (👁️)".
-             - "Cool" -> 😎 (Face), NOT ❄️ (Snow) unless it literally means cold.
-          3. Keep it short (1-4 emojis).
+             - "Cool" -> ["😎"]
+             - "Yes" -> ["👍"]
+             
+          3. Keep it to 1-3 emojis.
           
           Return JSON:
           { "emojis": ["👋"] }

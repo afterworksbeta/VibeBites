@@ -41,31 +41,32 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
     try {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         
-        // UPDATED PROMPT: PRIORITIZE LITERAL MEANING
+        // STRICT PROMPT: NO PHONETICS
         const prompt = `
-          Act as a Emoji Translator for a guessing game.
-          Target Word/Phrase: "${text}"
+          Task: Translate the text "${text}" into Emojis based on MEANING, NOT SOUND.
           
-          TASK: Generate a sequence of emojis (1-5 emojis) that represents "${text}" MOST CLEARLY.
+          CRITICAL RULES (FOLLOW STRICTLY):
+          1. NO PHONETIC MATCHING: 
+             - DO NOT use ⬆️ (Up/High) for "Hi".
+             - DO NOT use 👁️ (Eye) for "I".
+             - DO NOT use 🐝 (Bee) for "Be".
+             
+          2. USE DIRECT ACTIONS/OBJECTS:
+             - "Hi", "Hello", "Hey" -> MUST BE ["👋"] (Waving Hand).
+             - "Bye", "See ya" -> ["👋"] or ["✌️"].
+             - "Love" -> ["❤️"].
+             - "Yes" -> ["👍"] or ["👌"].
+             - "No" -> ["👎"] or ["❌"].
           
-          PRIORITY RULES:
-          1. LITERAL TRANSLATION IS KING: If the word has a direct emoji, USE IT FIRST.
-             - "Hi" / "Hello" -> 👋
-             - "Love" -> ❤️
-             - "Cat" -> 🐱
-          2. ACTION/VERB MAPPING: Use the emoji that shows the action.
-             - "Run" -> 🏃
-             - "Sleep" -> 😴
-          3. REBUS/COMBINATION: Only use combinations if a single emoji isn't enough to describe the object.
-             - "Hot Dog" -> 🔥 + 🐶
-          4. NO ABSTRACT NONSENSE: Do not use arrows for "High" unless the word is "Up". Do not use Eye for "I".
+          3. K.I.S.S (Keep It Simple & Short):
+             - Use 1-3 emojis max for simple phrases.
           
           OUTPUT FORMAT (JSON):
           {
             "emojis": ["👋"],
-            "hint": "A common greeting", (Max 4 words)
-            "topic": "SOCIAL", (Single word category)
-            "difficulty": "EASY", (EASY = direct visual, HARD = requires thinking)
+            "hint": "A greeting",
+            "topic": "SOCIAL",
+            "difficulty": "EASY",
             "points": 50
           }
         `;
