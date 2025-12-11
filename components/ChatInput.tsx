@@ -29,12 +29,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend }) => {
     try {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         
-        // Updated prompt with strict schema enforcement to prevent Markdown issues
+        // UPDATED PROMPT: Direct translation instead of "vibe"
         const prompt = `
-          Analyze this message for a word-guessing game: "${text}"
+          Translate this text into emojis for a rebus puzzle: "${text}"
+          
+          Goal: The player must guess the exact text "${text}" from the emojis.
+          Rule: Use LITERAL visual representations of the words (nouns/verbs). 
+          Example: "I love cats" -> [🤟, ❤️, 🐱]
           
           Return a JSON object with:
-          "emojis": Array of 3-6 emojis that represent the message concepts sequentially or capture the "vibe" for a player to guess.
+          "emojis": Array of 3-6 emojis.
         `;
 
         const response = await ai.models.generateContent({
@@ -56,7 +60,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend }) => {
 
         let output = response.text || "{}";
         
-        // Critical Fix: Strip Markdown code blocks if present (common cause of JSON.parse failure)
+        // Strip Markdown
         output = output.replace(/```json/g, '').replace(/```/g, '').trim();
 
         const result = JSON.parse(output);
@@ -70,7 +74,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend }) => {
         }
     } catch (e) {
         console.error("Failed to generate emojis", e);
-        // Robust Fallback: Randomize fallbacks so it doesn't look broken/repetitive
+        // Robust Fallback
         const fallbackSets = [
             ["👾", "⚡", "❓"],
             ["✨", "🎲", "🎯"],

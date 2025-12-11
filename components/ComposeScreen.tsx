@@ -40,15 +40,25 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
     setLoading(true);
     try {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        
+        // UPDATED PROMPT: Enforce literal meaning for guessing accuracy
         const prompt = `
-          Analyze this message for a word-guessing game: "${text}"
+          You are a game engine for a word-guessing game.
+          Target Answer: "${text}"
           
-          Return a JSON object with:
-          1. "emojis": Array of 3-6 emojis that represent the message concepts sequentially.
-          2. "hint": A short, indirect clue about the context (e.g. 'About breakfast', 'Weekend plan', 'Feeling'). Max 4-6 words. Do NOT reveal the exact answer. If the text is Thai, the hint must be Thai.
-          3. "topic": A very short 1 word category (e.g. ACTIVITY, FOOD).
-          4. "difficulty": "EASY", "MEDIUM", or "HARD".
-          5. "points": Integer estimate between 50-200 based on difficulty.
+          Your task: Generate a sequence of emojis that act as a DIRECT VISUAL PUZZLE for the player to guess the Target Answer exactly.
+          
+          Rules:
+          1. Emojis must LITERALLY represent the nouns, verbs, or concepts in the text.
+          2. Do NOT use abstract "vibes". Use specific objects. (e.g. if text is "Pizza Party", use [🍕, 🎉], do not use [😋, ✨]).
+          3. Sequence must follow the word order of the text.
+          
+          Return JSON:
+          1. "emojis": Array of 3-6 emojis.
+          2. "hint": A specific clue describing the context or category (e.g. "Italian Food", "Weekend Activity"). Max 4 words. Do NOT include the answer words.
+          3. "topic": A single UPPERCASE category word (e.g. FOOD, SPORT, WORK).
+          4. "difficulty": "EASY" (concrete objects), "MEDIUM" (actions/feelings), or "HARD" (abstract).
+          5. "points": 50-200.
         `;
 
         const response = await ai.models.generateContent({
@@ -56,14 +66,13 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
             contents: prompt,
             config: { 
                 responseMimeType: 'application/json',
-                // Strict schema ensures consistent JSON structure
                 responseSchema: {
                     type: Type.OBJECT,
                     properties: {
                         emojis: { type: Type.ARRAY, items: { type: Type.STRING } },
                         hint: { type: Type.STRING },
                         topic: { type: Type.STRING },
-                        difficulty: { type: Type.STRING }, // Use string then cast to enum manually to be safe
+                        difficulty: { type: Type.STRING },
                         points: { type: Type.NUMBER }
                     }
                 }
@@ -71,14 +80,11 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
         });
 
         let output = response.text || "{}";
-        
-        // Critical Fix: Strip Markdown if AI adds it (e.g. ```json ... ```)
         output = output.replace(/```json/g, '').replace(/```/g, '').trim();
 
         const result = JSON.parse(output) as any;
         
         if (result && result.emojis) {
-            // Validate & Normalize fields
             const normalized: VibeAnalysis = {
                 emojis: result.emojis,
                 hint: result.hint || "GUESS THE VIBE!",
@@ -95,7 +101,6 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
     } catch (e) {
         console.error("Failed to generate vibe analysis", e);
         
-        // Randomized Fallback to avoid "Same Emoji" bug appearance
         const fallbackSets = [
             { emojis: ["👾", "⚡", "❓"], topic: "MYSTERY" },
             { emojis: ["🎲", "🕹️", "🎮"], topic: "GAME" },
@@ -146,14 +151,13 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
             
             console.log("[ComposeScreen] Insert Payload:", packedPayload);
 
-            // Insert into 'messages' using correct schema columns
             const { error } = await supabase.from('messages').insert({
                 sender_id: user.id,
                 receiver_id: friend.id,
-                original_text: packedPayload, // Changed from 'text'
-                emoji_sequences: analysis.emojis, // Added NOT NULL column
-                sent_at: currentIsoTime, // Added for sorting
-                difficulty_level: analysis.difficulty.toLowerCase() // Optional schema match
+                original_text: packedPayload,
+                emoji_sequences: analysis.emojis,
+                sent_at: currentIsoTime,
+                difficulty_level: analysis.difficulty.toLowerCase()
             });
 
             if (error) {
@@ -283,7 +287,7 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
                         </div>
 
                         <div className="grid grid-cols-2 gap-3 mb-4">
-                            {/* HINT BOX (REPLACES TOPIC) */}
+                            {/* HINT BOX */}
                             <div className="col-span-2 bg-[#444] p-2 border-[2px] border-black rounded flex flex-col items-center">
                                 <div className="flex items-center gap-1 mb-1">
                                     <Lightbulb size={12} color="#FFD740" />
