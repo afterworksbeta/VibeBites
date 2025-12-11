@@ -16,7 +16,7 @@ import { AvatarSelectionScreen } from './components/AvatarSelectionScreen';
 import { FriendSelectionScreen } from './components/FriendSelectionScreen'; 
 import { ChangePasswordScreen } from './components/ChangePasswordScreen';
 import { MOCK_FRIENDS, MOCK_MESSAGES, COLORS } from './constants';
-import { Friend, CardStatus } from './types';
+import { Friend, CardStatus, Message } from './types';
 import { supabase } from './lib/supabaseClient';
 
 // Helper to validate UUIDs
@@ -38,23 +38,22 @@ const App: React.FC = () => {
   // State for current user
   const [currentUserSeed, setCurrentUserSeed] = useState('currentUser_player1');
   const [currentUserBgColor, setCurrentUserBgColor] = useState('#b6e3f4');
-  const [currentUsername, setCurrentUsername] = useState(''); // Initial empty
+  const [currentUsername, setCurrentUsername] = useState(''); 
 
   // Scanner state
   const [startScanning, setStartScanning] = useState(false);
 
+  // Game Result State
+  const [lastGameResult, setLastGameResult] = useState<{message: Message, score: number, guess: string} | null>(null);
+
   useEffect(() => {
-    // Check active session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session) {
         setCurrentScreen('home');
-        
-        // IMMEDIATE: Set username from metadata if available (faster than DB fetch)
         if (session.user?.user_metadata?.username) {
             setCurrentUsername(session.user.user_metadata.username);
         }
-
         fetchProfileWithRetry(session.user.id);
         fetchFriends(session.user.id);
       } else {
@@ -68,64 +67,51 @@ const App: React.FC = () => {
       setSession(session);
       if (session) {
         setCurrentScreen('home');
-        
-        // IMMEDIATE: Set username from metadata if available (faster than DB fetch)
         if (session.user?.user_metadata?.username) {
             setCurrentUsername(session.user.user_metadata.username);
         }
-
-        // Add a small delay/retry for profile fetch as DB trigger might be slightly delayed on signup
         fetchProfileWithRetry(session.user.id);
         fetchFriends(session.user.id);
       } else {
         setCurrentScreen('auth');
         setFriends([]);
-        setCurrentUsername(''); // Reset on logout
+        setCurrentUsername(''); 
       }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  // Robust fetch with retries for new accounts
   const fetchProfileWithRetry = async (userId: string, retries = 3) => {
       let attempt = 0;
       while (attempt < retries) {
           const success = await fetchProfile(userId);
           if (success) break;
           attempt++;
-          // Wait 500ms before retry
           if (attempt < retries) await new Promise(r => setTimeout(r, 500));
       }
   };
 
   const fetchProfile = async (userId: string): Promise<boolean> => {
     try {
-        // Use select('*') instead of specific columns so it doesn't fail if schema is missing columns
         const { data, error } = await supabase
         .from('profiles')
         .select('*') 
         .eq('id', userId)
         .maybeSingle(); 
         
-        // Check if data exists AND has the username (minimum viable profile)
         if (data && data.username) {
-            // Update username from DB if it exists (source of truth)
             setCurrentUsername(data.username);
-            
-            // Check for optional columns before using them
             if (data.avatar_seed) setCurrentUserSeed(data.avatar_seed);
             if (data.bg_color) setCurrentUserBgColor(data.bg_color);
             return true;
         } else {
-            // SELF-HEALING: Profile missing or incomplete? Create/Fix it!
             console.warn("Profile missing or incomplete. Attempting self-healing...");
             const { data: { session } } = await supabase.auth.getSession();
             
             if (session && session.user && session.user.id === userId) {
                 const recoveryUsername = session.user.user_metadata?.username || `PLAYER_${userId.substring(0,4).toUpperCase()}`;
                 
-                // Attempt 1: Full Profile Upsert
                 const fullProfile = {
                     id: userId,
                     username: recoveryUsername,
@@ -136,26 +122,8 @@ const App: React.FC = () => {
                 const { error: insertError } = await supabase.from('profiles').upsert(fullProfile);
 
                 if (!insertError) {
-                    console.log("Self-healing successful: Full Profile created.");
                     setCurrentUsername(recoveryUsername);
                     return true;
-                } else {
-                    console.warn("Full self-healing failed (possibly missing columns):", insertError.message || JSON.stringify(insertError));
-                    
-                    // Attempt 2: Minimal Profile Upsert (Fallback)
-                    // If DB is missing avatar_seed/bg_color columns, this ensures at least the USERNAME is saved so friends can find them.
-                    const { error: minError } = await supabase.from('profiles').upsert({
-                        id: userId,
-                        username: recoveryUsername
-                    });
-
-                    if (!minError) {
-                         console.log("Self-healing successful: Minimal Profile created.");
-                         setCurrentUsername(recoveryUsername);
-                         return true;
-                    } else {
-                         console.error("Self-healing failed completely:", minError.message || JSON.stringify(minError));
-                    }
                 }
             }
         }
@@ -168,17 +136,14 @@ const App: React.FC = () => {
 
   const fetchFriends = async (userId: string) => {
     setLoading(true);
-    
     try {
-      // 1. Fetch friendships (connections)
       const { data: connections, error: connError } = await supabase
         .from('friendships')
         .select('user_id, friend_id, status')
         .or(`user_id.eq.${userId},friend_id.eq.${userId}`);
 
       if (connError) {
-        console.error('Error fetching friendships:', connError);
-        setFriends(MOCK_FRIENDS); // Fallback to mock if DB fails
+        setFriends(MOCK_FRIENDS); 
         return;
       }
 
@@ -187,12 +152,10 @@ const App: React.FC = () => {
         return;
       }
 
-      // 2. Extract IDs of the "other" users
       const friendIds = connections.map((c: any) => 
         c.user_id === userId ? c.friend_id : c.user_id
       );
 
-      // Filter out duplicates if any
       const uniqueFriendIds = [...new Set(friendIds)];
 
       if (uniqueFriendIds.length === 0) {
@@ -200,18 +163,15 @@ const App: React.FC = () => {
         return;
       }
 
-      // 3. Fetch profiles for those IDs
       const { data: profiles, error: profError } = await supabase
         .from('profiles')
-        .select('*') // Use * for resilience
+        .select('*') 
         .in('id', uniqueFriendIds);
 
       if (profError) {
-        console.error('Error fetching profiles:', profError);
         return;
       }
 
-      // 4. Merge data
       if (profiles) {
         const formattedFriends: Friend[] = profiles.map((p: any) => ({
           id: p.id,
@@ -224,18 +184,14 @@ const App: React.FC = () => {
         }));
         setFriends(formattedFriends);
       }
-      
     } catch (err) {
-      console.error('Unexpected error in fetchFriends:', err);
       setFriends(MOCK_FRIENDS);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleLogin = () => {
-    // Handled by auth state change
-  };
+  const handleLogin = () => {};
   
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -245,20 +201,14 @@ const App: React.FC = () => {
       const confirmDelete = window.confirm("DELETE ALL HISTORY? THIS CANNOT BE UNDONE!");
       if (!confirmDelete) return;
 
-      // Optimistic Update
       setFriends([]);
       setCurrentScreen('home');
 
       if (session) {
           const userId = session.user.id;
           try {
-              // Delete all messages involved with user
               await supabase.from('messages').delete().or(`sender_id.eq.${userId},receiver_id.eq.${userId}`);
-              
-              // Delete all friendships involved with user
               await supabase.from('friendships').delete().or(`user_id.eq.${userId},friend_id.eq.${userId}`);
-              
-              console.log("Data cleared from Supabase");
           } catch (e) {
               console.error("Error clearing cloud data:", e);
           }
@@ -272,61 +222,33 @@ const App: React.FC = () => {
 
   const handleDeleteConversation = async (e: React.MouseEvent, friendId: string | number) => {
       e.stopPropagation();
-      
       const confirmDelete = window.confirm("REMOVE FRIEND & DELETE CHAT?");
       if (!confirmDelete) return;
 
-      // Optimistic update
       setFriends(prev => prev.filter(f => f.id !== friendId));
       
-      if (session) {
-            if (isUUID(friendId)) {
-                // Delete friendship in DB (Messages usually cascade delete or can remain orphan depending on schema, 
-                // but here we just break the link)
-                const { error } = await supabase
-                    .from('friendships')
-                    .delete()
-                    .or(`and(user_id.eq.${session.user.id},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${session.user.id})`);
-
-                if (error) console.error("Error deleting friend from DB:", error);
-            }
+      if (session && isUUID(friendId)) {
+            await supabase
+                .from('friendships')
+                .delete()
+                .or(`and(user_id.eq.${session.user.id},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${session.user.id})`);
       }
   };
 
   const handleAddNewFriend = async (newFriend: Friend) => {
-      // Optimistic update
       setFriends(prev => [newFriend, ...prev]);
       
-      if (session) {
-        if (!isUUID(newFriend.id)) {
-            console.log("Skipping DB insert for non-UUID friend (mock/demo data):", newFriend.id);
-            return;
-        }
-
-        // Create friendship in DB
-        // Check if friendship already exists
-        const { data: existing, error: fetchError } = await supabase
+      if (session && isUUID(newFriend.id)) {
+        const { data: existing } = await supabase
             .from('friendships')
             .select('*')
             .or(`and(user_id.eq.${session.user.id},friend_id.eq.${newFriend.id}),and(user_id.eq.${newFriend.id},friend_id.eq.${session.user.id})`);
         
-        if (fetchError) {
-             console.error("Error checking existing friendship:", fetchError);
-             return;
-        }
+        if (existing && existing.length > 0) return;
 
-        if (existing && existing.length > 0) {
-            console.log("Friendship already exists");
-            return;
-        }
-
-        const { error } = await supabase
+        await supabase
             .from('friendships')
             .insert({ user_id: session.user.id, friend_id: newFriend.id }); 
-            
-        if (error) {
-             console.error("Failed to add friend to DB:", error.message || error);
-        }
       }
   };
 
@@ -348,32 +270,17 @@ const App: React.FC = () => {
     setSelectedFriend(null);
   };
 
-  const handleProfileClick = () => {
-      setCurrentScreen('profile');
-  };
-  
-  const handleSettingsClick = () => {
-      setCurrentScreen('settings');
-  };
-  
+  const handleProfileClick = () => setCurrentScreen('profile');
+  const handleSettingsClick = () => setCurrentScreen('settings');
   const handleSettingsBack = () => {
-      if (friends.length === 0) {
-          setCurrentScreen('home');
-      } else {
-          setCurrentScreen('profile');
-      }
+      if (friends.length === 0) setCurrentScreen('home');
+      else setCurrentScreen('profile');
   };
 
-  const handleInviteClick = () => {
-      setCurrentScreen('invite');
-  };
-  
+  const handleInviteClick = () => setCurrentScreen('invite');
   const handleInviteBack = () => {
-      if (friends.length === 0) {
-          setCurrentScreen('home');
-      } else {
-          setCurrentScreen('profile');
-      }
+      if (friends.length === 0) setCurrentScreen('home');
+      else setCurrentScreen('profile');
   };
   
   const handleAddFriendClick = () => {
@@ -388,14 +295,16 @@ const App: React.FC = () => {
   
   const handleAddFriendBack = () => {
       setCurrentScreen('home');
-      setStartScanning(false); // Reset to ensure next open is fresh
+      setStartScanning(false);
   };
 
-  const handleGameSuccess = () => {
+  const handleGameSuccess = (message: Message) => {
+      setLastGameResult({ message, score: 100, guess: "" });
       setCurrentScreen('success');
   };
 
-  const handleGameLoss = () => {
+  const handleGameLoss = (message: Message, score: number, guess: string) => {
+      setLastGameResult({ message, score, guess });
       setCurrentScreen('wrong');
   };
 
@@ -407,20 +316,14 @@ const App: React.FC = () => {
       setCurrentScreen('chat'); 
   };
 
-  // Avatar Selection Handlers
-  const handleEditProfile = () => {
-    setCurrentScreen('avatarSelect');
-  };
+  const handleEditProfile = () => setCurrentScreen('avatarSelect');
 
-  const handleChangePasswordClick = () => {
-    setCurrentScreen('changePassword');
-  };
+  const handleChangePasswordClick = () => setCurrentScreen('changePassword');
 
   const handleAvatarSave = async (newSeed: string, newBgColor: string) => {
     setCurrentUserSeed(newSeed);
     setCurrentUserBgColor(newBgColor);
     setCurrentScreen('profile');
-    
     if (session) {
         await supabase.from('profiles').update({ 
             avatar_seed: newSeed,
@@ -432,7 +335,6 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-white font-['Press_Start_2P'] antialiased selection:bg-[#FF4081] selection:text-white overflow-hidden flex flex-col items-center">
       
-      {/* Mobile Container Limited Width */}
       <div className="w-full max-w-md bg-white h-screen shadow-2xl relative border-x-4 border-black flex flex-col">
         
         {currentScreen === 'auth' && (
@@ -456,7 +358,6 @@ const App: React.FC = () => {
                         onProfileClick={handleProfileClick} 
                         onAddFriendClick={handleAddFriendClick}
                     />
-
                     <main className="p-5 pb-32 flex flex-col gap-4 overflow-y-auto flex-1 scrollbar-hide">
                     {friends.map((friend) => (
                         <PixelCard 
@@ -466,15 +367,12 @@ const App: React.FC = () => {
                         onDelete={(e) => handleDeleteConversation(e, friend.id)}
                         />
                     ))}
-                    
-                    {/* Decorative "End of List" marker */}
                     <div className="flex justify-center mt-8 opacity-50">
                         <div className="h-2 w-2 bg-black mx-1"></div>
                         <div className="h-2 w-2 bg-black mx-1"></div>
                         <div className="h-2 w-2 bg-black mx-1"></div>
                     </div>
                     </main>
-
                     <FloatingActionButton onClick={handleComposeClick} />
                 </>
             )}
@@ -492,7 +390,7 @@ const App: React.FC = () => {
         {currentScreen === 'chat' && selectedFriend && (
           <ChatScreen 
             friend={selectedFriend} 
-            messages={MOCK_MESSAGES} // Initial placeholder, ChatScreen will fetch real
+            messages={MOCK_MESSAGES}
             onBack={handleBack}
             onGameSuccess={handleGameSuccess}
             onGameLoss={handleGameLoss}
@@ -509,6 +407,7 @@ const App: React.FC = () => {
         {currentScreen === 'success' && selectedFriend && (
             <SuccessScreen 
                 friend={selectedFriend}
+                message={lastGameResult?.message}
                 onSendBack={handleBackToChat}
                 onBackToChat={handleBackToChat}
             />
@@ -517,6 +416,9 @@ const App: React.FC = () => {
         {currentScreen === 'wrong' && selectedFriend && (
             <WrongAnswerScreen
                 friend={selectedFriend}
+                message={lastGameResult?.message}
+                userGuess={lastGameResult?.guess}
+                score={lastGameResult?.score}
                 onTryAgain={handleTryAgain}
                 onNext={handleBackToChat}
             />
@@ -576,10 +478,8 @@ const App: React.FC = () => {
                 startScanning={startScanning}
             />
         )}
-        
       </div>
       
-      {/* Desktop Background Decoration */}
       <div className="fixed top-0 left-0 w-full h-full -z-10 bg-[#2196F3] pattern-dots pointer-events-none hidden md:block">
          <div className="absolute top-1/2 left-10 text-white text-4xl max-w-xs drop-shadow-[4px_4px_0_#000]">
             VIBE<br/>BITES<br/><span className="text-yellow-400 text-sm">MOBILE PREVIEW</span>

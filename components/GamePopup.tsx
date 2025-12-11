@@ -10,17 +10,17 @@ interface GamePopupProps {
   message?: Message;
   onClose: () => void;
   onWin: () => void;
-  onLoss?: () => void;
+  onLoss?: (score: number, guess: string) => void;
 }
 
 export const GamePopup: React.FC<GamePopupProps> = ({ friend, message, onClose, onWin, onLoss }) => {
   const [isPaused, setIsPaused] = useState(false);
   const [scrollPos, setScrollPos] = useState(0);
-  const [showHint, setShowHint] = useState(false); // Changed from showTopic to showHint
+  const [showHint, setShowHint] = useState(false);
   const [currentSet, setCurrentSet] = useState(0);
+  const [userAnswer, setUserAnswer] = useState('');
 
   // Dynamic Content Logic
-  // If message provided, use its emojis. If not, fallback to default sets.
   const dynamicSprites = message?.emojis && message.emojis.length > 0 
       ? [message.emojis] // Wrap in array as single set
       : [['🏃', '🏁', '⏰'], ['💿', '⭐', '🌅']];
@@ -40,8 +40,6 @@ export const GamePopup: React.FC<GamePopupProps> = ({ friend, message, onClose, 
     if (isPaused) return;
 
     const interval = setInterval(() => {
-      // Speed: 3px every 30ms (~100px/s)
-      // Reset at 800px to ensure the single set clears the screen before restarting
       setScrollPos((prev) => {
         const next = prev + 3;
         return next > 800 ? 0 : next;
@@ -54,13 +52,70 @@ export const GamePopup: React.FC<GamePopupProps> = ({ friend, message, onClose, 
   const handlePrevSet = (e: React.MouseEvent) => {
     e.stopPropagation();
     setCurrentSet((prev) => (prev - 1 + spriteSets.length) % spriteSets.length);
-    setScrollPos(0); // Reset scroll on set change
+    setScrollPos(0);
   };
 
   const handleNextSet = (e: React.MouseEvent) => {
     e.stopPropagation();
     setCurrentSet((prev) => (prev + 1) % spriteSets.length);
-    setScrollPos(0); // Reset scroll on set change
+    setScrollPos(0);
+  };
+
+  // --- ANSWER CHECKING LOGIC ---
+  const calculateSimilarity = (str1: string, str2: string) => {
+      const s1 = str1.trim().toLowerCase().replace(/\s+/g, '');
+      const s2 = str2.trim().toLowerCase().replace(/\s+/g, '');
+      
+      if (s1 === s2) return 100;
+      if (!s1 || !s2) return 0;
+
+      const track = Array(s2.length + 1).fill(null).map(() =>
+          Array(s1.length + 1).fill(null));
+
+      for (let i = 0; i <= s1.length; i += 1) track[0][i] = i;
+      for (let j = 0; j <= s2.length; j += 1) track[j][0] = j;
+
+      for (let j = 1; j <= s2.length; j += 1) {
+          for (let i = 1; i <= s1.length; i += 1) {
+              const indicator = s1[i - 1] === s2[j - 1] ? 0 : 1;
+              track[j][i] = Math.min(
+                  track[j][i - 1] + 1,
+                  track[j - 1][i] + 1,
+                  track[j - 1][i - 1] + indicator,
+              );
+          }
+      }
+      const distance = track[s2.length][s1.length];
+      const maxLength = Math.max(s1.length, s2.length);
+      
+      return Math.floor(((maxLength - distance) / maxLength) * 100);
+  };
+
+  const handleSubmit = () => {
+      if (!userAnswer.trim()) return;
+
+      const targetText = message?.text || "";
+      if (!targetText) {
+          onWin();
+          return;
+      }
+
+      const score = calculateSimilarity(userAnswer, targetText);
+      console.log(`[GamePopup] Checking Answer. Input: "${userAnswer}", Target: "${targetText}", Score: ${score}%`);
+
+      // Threshold: 75% match
+      if (score >= 75) {
+          onWin();
+      } else {
+          if (onLoss) onLoss(score, userAnswer);
+          else onClose();
+      }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSubmit();
+    }
   };
 
   return (
@@ -121,16 +176,15 @@ export const GamePopup: React.FC<GamePopupProps> = ({ friend, message, onClose, 
               </span>
            </div>
 
-           {/* Scrolling Sprites Container - Single Row */}
+           {/* Scrolling Sprites Container */}
            <div className="flex-1 w-full relative overflow-hidden flex items-center justify-center my-4">
               <div 
                 className="absolute flex gap-16 whitespace-nowrap transition-none will-change-transform"
                 style={{ 
                     transform: `translateX(${-scrollPos}px)`,
-                    left: '100%', // Start off-screen right
+                    left: '100%', 
                 }}
               >
-                 {/* Single set for loop-once-then-restart behavior */}
                  {spriteSets[currentSet].map((s, i) => (
                     <PixelSprite key={`${currentSet}-${i}`} emoji={s} size={56} />
                  ))}
@@ -170,8 +224,12 @@ export const GamePopup: React.FC<GamePopupProps> = ({ friend, message, onClose, 
         >
            <input 
              type="text" 
+             value={userAnswer}
+             onChange={(e) => setUserAnswer(e.target.value)}
+             onKeyDown={handleKeyDown}
              placeholder="TYPE ANSWER..." 
              className="w-full h-[60px] border-[4px] border-black px-4 text-[14px] font-['Press_Start_2P'] uppercase outline-none shadow-[4px_4px_0_rgba(0,0,0,0.2)] focus:shadow-[4px_4px_0_rgba(0,0,0,1)] transition-all placeholder:text-gray-400"
+             autoFocus
            />
            
            <div className="flex gap-3 h-[56px]">
@@ -184,7 +242,7 @@ export const GamePopup: React.FC<GamePopupProps> = ({ friend, message, onClose, 
               </button>
 
               <button 
-                onClick={onWin}
+                onClick={handleSubmit}
                 className="flex-1 bg-[#00E676] border-[4px] border-black shadow-[4px_4px_0_0_#000] active:translate-y-1 active:shadow-none transition-all flex items-center justify-center"
               >
                  <span className="text-[12px] font-bold text-black">{">>>"} GO! {"<<<"}</span>

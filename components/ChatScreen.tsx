@@ -12,8 +12,8 @@ interface ChatScreenProps {
   friend: Friend;
   messages: Message[]; 
   onBack: () => void;
-  onGameSuccess: () => void;
-  onGameLoss?: () => void;
+  onGameSuccess: (message: Message) => void;
+  onGameLoss?: (message: Message, score: number, guess: string) => void;
 }
 
 // Helper to validate UUIDs
@@ -93,11 +93,8 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
     }
 
     try {
-        // Fetch conversation: (Me -> Them) OR (Them -> Me)
-        // Use exact formatting for Supabase/PostgREST
         const filter = `and(sender_id.eq.${currentUserId},receiver_id.eq.${friend.id}),and(sender_id.eq.${friend.id},receiver_id.eq.${currentUserId})`;
 
-        // FIX: Explicitly select known columns. REMOVED 'status' as it doesn't exist.
         const { data, error } = await supabase
             .from('messages')
             .select('id, sender_id, receiver_id, original_text, emoji_sequences, sent_at')
@@ -110,11 +107,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
         } else if (data) {
             setChatMessages(prev => {
                 const dbMessages = data.map(m => mapToMessage(m, currentUserId));
-                
-                // Keep local pending messages (optimistic updates)
                 const localPending = prev.filter(m => m.status === 'SENDING');
-                
-                // Merge DB messages with local pending
                 return [...dbMessages, ...localPending];
             });
         }
@@ -136,10 +129,8 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
         
         console.log(`[ChatScreen] 🚀 Setup started. Me: ${currentUserId}, Friend: ${friend.id}`);
 
-        // 1. Initial Fetch
         await fetchMessages(currentUserId);
 
-        // 2. Realtime Subscription
         const channelName = `room_chat_${friend.id}_${Date.now()}`;
         channel = supabase.channel(channelName)
             .on(
@@ -151,22 +142,17 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
                 }, 
                 (payload) => {
                     const newMsg = payload.new;
-
-                    // Client-side filtering: Check if this message belongs to THIS conversation
                     const isRelevant = 
-                        (newMsg.sender_id === friend.id && newMsg.receiver_id === currentUserId) || // Incoming
-                        (newMsg.sender_id === currentUserId && newMsg.receiver_id === friend.id);   // Outgoing (from another device?)
+                        (newMsg.sender_id === friend.id && newMsg.receiver_id === currentUserId) || 
+                        (newMsg.sender_id === currentUserId && newMsg.receiver_id === friend.id);   
 
                     if (isRelevant) {
                          console.log("🔔 [ChatScreen] Relevant Message Received!");
                          const messageObj = mapToMessage(newMsg, currentUserId);
-                         
                          setChatMessages(prev => {
-                             // Simple dedupe by ID
                              if (prev.some(m => m.id === messageObj.id)) return prev;
                              return [...prev, messageObj];
                          });
-                         
                          setTimeout(scrollToBottom, 100);
                     }
                 }
@@ -175,7 +161,6 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
                 console.log(`🔌 [ChatScreen] Subscription Status: ${status}`);
             });
 
-        // 3. Polling Fallback (Every 3 seconds)
         pollingInterval = setInterval(() => {
             fetchMessages(currentUserId);
         }, 3000);
@@ -191,7 +176,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
         if (channel) supabase.removeChannel(channel);
         if (pollingInterval) clearInterval(pollingInterval);
     };
-  }, [friend.id]); // Re-run if friend changes
+  }, [friend.id]); 
 
   useEffect(() => {
     scrollToBottom();
@@ -211,15 +196,19 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
   };
 
   const handleWin = () => {
+      if (selectedMessage) {
+        onGameSuccess(selectedMessage);
+      }
       setShowGamePopup(false);
       setSelectedMessage(null);
-      onGameSuccess();
   }
 
-  const handleLoss = () => {
+  const handleLoss = (score: number, guess: string) => {
+      if (selectedMessage && onGameLoss) {
+          onGameLoss(selectedMessage, score, guess);
+      }
       setShowGamePopup(false);
       setSelectedMessage(null);
-      if (onGameLoss) onGameLoss();
   }
   
   const handleClosePopup = () => {
@@ -247,7 +236,6 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
         emojis: emojis || [] 
     };
     
-    // Optimistic UI update
     setChatMessages(prev => [...prev, optimisticMessage]);
     setTimeout(scrollToBottom, 50);
 
@@ -258,7 +246,6 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
     }
 
     try {
-        // Pack Payload
         const payload = {
             text: text,
             emojis: emojis || [],
@@ -270,8 +257,6 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
 
         console.log("[ChatScreen] Sending to DB...", { receiver: friend.id });
 
-        // Insert - ensure we use columns that definitely exist
-        // FIX: Explicitly select known columns on return. REMOVED 'status'.
         const { data, error } = await supabase
             .from('messages')
             .insert({
@@ -301,7 +286,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
   };
 
   return (
-    <div className="flex flex-col h-full w-full bg-white relative">
+    <div className="flex flex-col h-full w-full bg-white relative overflow-hidden">
       <ChatHeader friend={friend} onBack={onBack} />
       
       <main 
@@ -320,7 +305,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
                     <div 
                         key={msg.id} 
                         onClick={() => handleMessageClick(msg)} 
-                        className="cursor-pointer active:scale-[0.98] transition-transform duration-100"
+                        className="cursor-pointer active:scale-[0.98] transition-transform duration-100 w-full flex flex-col"
                     >
                         <MessageBubble message={msg} friend={friend} />
                     </div>

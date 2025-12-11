@@ -12,7 +12,7 @@ interface ChatHeaderProps {
 export const ChatHeader: React.FC<ChatHeaderProps> = ({ friend, onBack }) => {
   return (
     <div 
-      className="w-full h-[100px] border-b-4 border-black flex items-center justify-between px-4 relative z-50 shrink-0"
+      className="w-full h-[100px] border-b-4 border-black flex items-center justify-between px-4 sticky top-0 z-50 shrink-0"
       style={{ backgroundColor: COLORS.PURPLE }}
     >
       {/* Left: Back Button */}

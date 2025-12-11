@@ -17,10 +17,15 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, friend })
   // Render Incoming Unsolved (Red)
   if (isIncomingUnsolved) {
     return (
-      <div className="relative mb-8 pl-4 w-[85%] self-start">
-        {/* Floating Avatar */}
-        <div className="absolute -top-4 -left-0 z-20">
-           <PixelAvatar seed={friend.avatarSeed} size={32} borderWidth={3} />
+      <div className="relative mb-8 pl-2 w-[85%] self-start mt-6">
+        {/* Header: Avatar + Name */}
+        <div className="absolute -top-7 left-0 z-20 flex items-center gap-2">
+           <div className="border-[3px] border-black bg-white">
+               <PixelAvatar seed={friend.avatarSeed} size={32} borderWidth={0} />
+           </div>
+           <span className="text-[10px] font-bold text-black bg-white px-2 py-0.5 border-[3px] border-black uppercase shadow-[2px_2px_0_rgba(0,0,0,0.2)]">
+              {friend.name}
+           </span>
         </div>
         
         <div 
@@ -47,7 +52,17 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, friend })
   // Render Incoming Solved (Green)
   if (isIncomingSolved) {
     return (
-      <div className="relative mb-6 w-[85%] self-start">
+      <div className="relative mb-6 pl-2 w-[85%] self-start mt-6">
+         {/* Header: Avatar + Name */}
+         <div className="absolute -top-7 left-0 z-20 flex items-center gap-2">
+           <div className="border-[3px] border-black bg-white">
+               <PixelAvatar seed={friend.avatarSeed} size={32} borderWidth={0} />
+           </div>
+           <span className="text-[10px] font-bold text-black bg-white px-2 py-0.5 border-[3px] border-black uppercase shadow-[2px_2px_0_rgba(0,0,0,0.2)]">
+              {friend.name}
+           </span>
+        </div>
+
         <div 
           className="relative p-3 rounded-xl border-4 border-black flex flex-col"
           style={{ 
@@ -74,14 +89,21 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, friend })
     );
   }
 
-  // Render Outgoing (Pink)
+  // Render Outgoing (Blue)
   if (isOutgoing) {
     return (
-      <div className="relative mb-6 w-[70%] self-end">
+      <div className="relative mb-6 w-[70%] self-end mt-4">
+        {/* Label: YOU */}
+        <div className="absolute -top-5 right-0 z-20">
+             <span className="text-[8px] font-bold text-white bg-black px-2 py-0.5 border-[2px] border-black uppercase">
+                YOU
+             </span>
+        </div>
+
         <div 
           className="relative p-4 rounded-xl border-4 border-black flex flex-col items-end"
           style={{ 
-            backgroundColor: COLORS.PINK,
+            backgroundColor: COLORS.BLUE, // Changed to Blue
             boxShadow: '4px 4px 0px 0px #000000'
           }}
         >

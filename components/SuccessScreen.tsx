@@ -1,15 +1,17 @@
 import React from 'react';
 import { COLORS } from '../constants';
 import { PixelAvatar } from './PixelAvatar';
-import { Friend } from '../types';
+import { Friend, Message } from '../types';
+import { MessageCircle } from 'lucide-react';
 
 interface SuccessScreenProps {
   friend: Friend;
+  message?: Message;
   onSendBack: () => void;
   onBackToChat: () => void;
 }
 
-export const SuccessScreen: React.FC<SuccessScreenProps> = ({ friend, onSendBack, onBackToChat }) => {
+export const SuccessScreen: React.FC<SuccessScreenProps> = ({ friend, message, onSendBack, onBackToChat }) => {
   return (
     <div className="flex flex-col h-full w-full bg-white font-['Press_Start_2P'] overflow-hidden animate-in fade-in duration-300">
       
@@ -43,7 +45,7 @@ export const SuccessScreen: React.FC<SuccessScreenProps> = ({ friend, onSendBack
 
         {/* Score Box */}
         <div className="bg-black px-6 py-3 border-[4px] border-black ring-[3px] ring-white mb-4 shadow-[8px_8px_0_rgba(0,0,0,0.3)] z-10">
-           <span className="text-[#FFD740] text-[18px] md:text-[20px] font-bold">MATCH: 95%</span>
+           <span className="text-[#FFD740] text-[18px] md:text-[20px] font-bold">MATCH: 100%</span>
         </div>
 
         {/* Diagonal Stripe Text */}
@@ -65,26 +67,24 @@ export const SuccessScreen: React.FC<SuccessScreenProps> = ({ friend, onSendBack
             <div className="bg-white border-[5px] border-black p-6 text-center shadow-[6px_6px_0_black] relative">
                 {/* Double Border Look */}
                 <div className="absolute inset-[4px] border-[2px] border-black opacity-10 pointer-events-none"></div>
-                <h2 className="text-[16px] leading-relaxed text-black">MADE IT ON TIME!</h2>
+                <h2 className="text-[16px] leading-relaxed text-black font-sans font-bold break-words">
+                    {message?.text || "..."}
+                </h2>
             </div>
          </div>
 
-         {/* Breakdown */}
+         {/* Hint Breakdown */}
          <div className="w-full">
             <div className="bg-black text-[#FFD740] text-[10px] px-2 py-1 inline-block mb-2 border-2 border-black">
-                HOW IT WORKS:
+                KEY HINT:
             </div>
             
             <div className="bg-[#2196F3] border-[3px] border-black p-3 mb-3 flex items-center gap-3 shadow-[4px_4px_0_black]">
-               <span className="text-[20px] bg-black/20 p-1 rounded">🏃🏁⏰</span>
+               <span className="text-[20px] bg-black/20 p-1 rounded">💡</span>
                <span className="text-white font-bold">=</span>
-               <span className="text-white text-[10px] md:text-[12px]">RUSHING</span>
-            </div>
-            
-            <div className="bg-[#FF4081] border-[3px] border-black p-3 flex items-center gap-3 shadow-[4px_4px_0_black]">
-               <span className="text-[20px] bg-black/20 p-1 rounded">🌅✨</span>
-               <span className="text-white font-bold">=</span>
-               <span className="text-white text-[10px] md:text-[12px]">MORNING GLORY</span>
+               <span className="text-white text-[10px] md:text-[12px] font-sans">
+                   {message?.hint || "N/A"}
+               </span>
             </div>
          </div>
       </div>
@@ -98,15 +98,8 @@ export const SuccessScreen: React.FC<SuccessScreenProps> = ({ friend, onSendBack
            onClick={onSendBack}
            className="w-full h-[64px] bg-[#FFD740] border-[5px] border-black shadow-[8px_8px_0_black] flex items-center justify-center gap-3 active:translate-y-[4px] active:shadow-[4px_4px_0_black] transition-all mb-3"
          >
-            <span className="text-black text-[14px] font-bold tracking-tight">{">>>"} SEND BACK! {"<<<"}</span>
-            <span className="text-[24px]">💌</span>
-         </button>
-         
-         <button 
-            onClick={onBackToChat}
-            className="text-[#FFD740] text-[10px] hover:text-white transition-colors underline decoration-2 underline-offset-4"
-         >
-            [BACK 2 CHAT]
+            <span className="text-black text-[14px] font-bold tracking-tight">{">>>"} BACK TO CHAT {"<<<"}</span>
+            <MessageCircle size={24} color="black" strokeWidth={3} />
          </button>
       </div>
 
