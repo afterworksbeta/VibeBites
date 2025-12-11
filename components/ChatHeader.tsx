@@ -27,7 +27,12 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({ friend, onBack }) => {
       <div className="flex flex-col items-center justify-center">
         <div className="relative">
             <div className="mb-1">
-                 <PixelAvatar seed={friend.avatarSeed} size={56} borderWidth={3} />
+                 <PixelAvatar 
+                    seed={friend.avatarSeed} 
+                    size={56} 
+                    borderWidth={3} 
+                    backgroundColor={friend.color}
+                 />
             </div>
         </div>
         <div className="flex flex-col items-center">

@@ -24,7 +24,12 @@ export const PixelCard: React.FC<PixelCardProps> = ({ friend, onClick, onDelete 
 
       {/* Left: Avatar */}
       <div className="mr-4 z-10">
-        <PixelAvatar seed={friend.avatarSeed} size={64} borderWidth={3} />
+        <PixelAvatar 
+            seed={friend.avatarSeed} 
+            size={64} 
+            borderWidth={3} 
+            backgroundColor={friend.color} 
+        />
       </div>
 
       {/* Center: Info */}

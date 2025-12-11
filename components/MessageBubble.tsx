@@ -21,7 +21,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, friend })
         {/* Header: Avatar + Name */}
         <div className="absolute -top-7 left-0 z-20 flex items-center gap-2">
            <div className="border-[3px] border-black bg-white">
-               <PixelAvatar seed={friend.avatarSeed} size={32} borderWidth={0} />
+               <PixelAvatar 
+                  seed={friend.avatarSeed} 
+                  size={32} 
+                  borderWidth={0} 
+                  backgroundColor={friend.color}
+               />
            </div>
            <span className="text-[10px] font-bold text-black bg-white px-2 py-0.5 border-[3px] border-black uppercase shadow-[2px_2px_0_rgba(0,0,0,0.2)]">
               {friend.name}
@@ -56,7 +61,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, friend })
          {/* Header: Avatar + Name */}
          <div className="absolute -top-7 left-0 z-20 flex items-center gap-2">
            <div className="border-[3px] border-black bg-white">
-               <PixelAvatar seed={friend.avatarSeed} size={32} borderWidth={0} />
+               <PixelAvatar 
+                  seed={friend.avatarSeed} 
+                  size={32} 
+                  borderWidth={0} 
+                  backgroundColor={friend.color}
+               />
            </div>
            <span className="text-[10px] font-bold text-black bg-white px-2 py-0.5 border-[3px] border-black uppercase shadow-[2px_2px_0_rgba(0,0,0,0.2)]">
               {friend.name}

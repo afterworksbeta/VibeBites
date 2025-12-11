@@ -173,7 +173,12 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
 
         <div className="flex items-center gap-3">
           <span className="text-black text-[12px] uppercase">TO: {friend.name}</span>
-          <PixelAvatar seed={friend.avatarSeed} size={40} borderWidth={3} />
+          <PixelAvatar 
+             seed={friend.avatarSeed} 
+             size={40} 
+             borderWidth={3} 
+             backgroundColor={friend.color}
+          />
         </div>
         
         <div className="w-8" />
