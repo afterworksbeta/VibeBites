@@ -5,14 +5,15 @@ import { PixelSprite } from './PixelSprite';
 interface InviteScreenProps {
   onBack: () => void;
   currentUserId?: string;
+  currentUsername?: string;
 }
 
-export const InviteScreen: React.FC<InviteScreenProps> = ({ onBack, currentUserId }) => {
+export const InviteScreen: React.FC<InviteScreenProps> = ({ onBack, currentUserId, currentUsername }) => {
   const [copied, setCopied] = useState(false);
 
-  // Generate a code from ID, or use a fallback
-  const uniqueCode = currentUserId 
-    ? `VB-${currentUserId.slice(0, 5).toUpperCase()}`
+  // Generate a code from Username to ensure AddFriendScreen can find it by username
+  const uniqueCode = currentUsername 
+    ? `VB-${currentUsername.toUpperCase()}`
     : 'VB-GUEST';
 
   const handleCopy = () => {
@@ -26,7 +27,7 @@ export const InviteScreen: React.FC<InviteScreenProps> = ({ onBack, currentUserI
   const RealPixelQR = () => {
     // Generate a QR code API URL based on the unique code
     const qrData = uniqueCode;
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${qrData}&bgcolor=FFFFFF&color=000000&margin=1`;
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrData)}&bgcolor=FFFFFF&color=000000&margin=1`;
 
     return (
       <div className="w-[200px] h-[200px] bg-white border-[6px] border-black p-2 relative shadow-[8px_8px_0_0_#000]">

@@ -31,6 +31,7 @@ const App: React.FC = () => {
   // State for current user
   const [currentUserSeed, setCurrentUserSeed] = useState('currentUser_player1');
   const [currentUserBgColor, setCurrentUserBgColor] = useState('#b6e3f4');
+  const [currentUsername, setCurrentUsername] = useState('PLAYER');
 
   // Scanner state
   const [startScanning, setStartScanning] = useState(false);
@@ -68,11 +69,12 @@ const App: React.FC = () => {
   const fetchProfile = async (userId: string) => {
     const { data, error } = await supabase
       .from('profiles')
-      .select('avatar_seed, bg_color')
+      .select('username, avatar_seed, bg_color')
       .eq('id', userId)
       .single();
     
     if (data) {
+      if (data.username) setCurrentUsername(data.username);
       if (data.avatar_seed) setCurrentUserSeed(data.avatar_seed);
       if (data.bg_color) setCurrentUserBgColor(data.bg_color);
     }
@@ -485,7 +487,11 @@ const App: React.FC = () => {
         )}
 
         {currentScreen === 'invite' && (
-            <InviteScreen onBack={handleInviteBack} currentUserId={session?.user?.id} />
+            <InviteScreen 
+                onBack={handleInviteBack} 
+                currentUserId={session?.user?.id}
+                currentUsername={currentUsername}
+            />
         )}
         
         {currentScreen === 'addFriend' && (
