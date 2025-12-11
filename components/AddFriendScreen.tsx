@@ -87,7 +87,9 @@ export const AddFriendScreen: React.FC<AddFriendScreenProps> = ({
 
     const timer = setTimeout(async () => {
         setSearching(true);
+        console.log(`🔎 Searching for partial: "${trimmedSearch}"`);
         try {
+            // Use select('*') to be safe against missing columns
             let query = supabase
                 .from('profiles')
                 .select('*')
@@ -101,9 +103,13 @@ export const AddFriendScreen: React.FC<AddFriendScreenProps> = ({
 
             const { data, error } = await query;
             
-            if (error) throw error;
+            if (error) {
+                console.error("❌ Search error:", error);
+                throw error;
+            }
 
             if (data) {
+                console.log(`✅ Found ${data.length} matches`);
                 const results: SearchResult[] = data.map((profile: any) => ({
                     id: profile.id,
                     name: profile.username || 'UNKNOWN',
@@ -127,7 +133,7 @@ export const AddFriendScreen: React.FC<AddFriendScreenProps> = ({
 
   // --- TAB 2: CODE ENTRY LOGIC ---
   const handleConnectByCode = async (rawInput: string) => {
-    const input = rawInput.trim();
+    const input = rawInput ? rawInput.trim() : '';
     if (!input) return;
 
     setLoadingCode(true);
@@ -135,10 +141,10 @@ export const AddFriendScreen: React.FC<AddFriendScreenProps> = ({
     setCodeSuccess(null);
 
     // 1. Clean Code: Robustly remove "VB-" prefix (case insensitive)
-    // "VB-BUBU" -> "BUBU", "vb-bubu" -> "bubu", "BUBU" -> "BUBU"
-    const searchVal = input.replace(/^vb-/i, '');
+    // "VB-BUBU " -> "BUBU", "vb-bubu" -> "bubu", "BUBU" -> "BUBU"
+    const cleanUsername = input.replace(/^vb-/i, '').trim();
     
-    console.log(`Searching DB for username: '${searchVal}'`);
+    console.log(`🔍 Searching DB for clean username: '${cleanUsername}'`);
 
     try {
         // 2. Search Supabase by Username (exact case-insensitive match)
@@ -146,14 +152,16 @@ export const AddFriendScreen: React.FC<AddFriendScreenProps> = ({
         const { data, error } = await supabase
             .from('profiles')
             .select('*')
-            .ilike('username', searchVal); // Case-insensitive exact match
+            .ilike('username', cleanUsername); // Case-insensitive exact match
 
         if (error) {
+            console.error("❌ Database query error:", error);
             throw error;
         }
 
         if (data && data.length > 0) {
              const user = data[0];
+             console.log("✅ User found:", user.username);
              
              if (currentUserId && user.id === currentUserId) {
                  setCodeError("CANNOT ADD YOURSELF!");
@@ -168,7 +176,7 @@ export const AddFriendScreen: React.FC<AddFriendScreenProps> = ({
                  lvl: 1,
                  stars: 0,
                  solved: false,
-                 avatarSeed: user.avatar_seed,
+                 avatarSeed: user.avatar_seed || 'default',
                  mutual: 0
              });
              
@@ -177,13 +185,14 @@ export const AddFriendScreen: React.FC<AddFriendScreenProps> = ({
              setIsScanning(false); // Close scanner if open
              setActiveTab('CODE'); // Switch to code tab so user sees success message
         } else {
-             setCodeError(`USER '${searchVal}' NOT FOUND`);
+             console.warn(`⚠️ User '${cleanUsername}' not found in 'profiles' table.`);
+             setCodeError(`USER '${cleanUsername}' NOT FOUND`);
              setIsScanning(false);
              setActiveTab('CODE'); 
         }
     } catch (e: any) {
-        console.error("Code search error:", e);
-        setCodeError("DB SEARCH FAILED");
+        console.error("❌ Code search execution failed:", e);
+        setCodeError("CONNECTION FAILED");
         setIsScanning(false);
         setActiveTab('CODE');
     } finally {
@@ -209,14 +218,18 @@ export const AddFriendScreen: React.FC<AddFriendScreenProps> = ({
             
             // Check if jsQR loaded correctly
             if (jsQR) {
-                const code = jsQR(imageData.data, imageData.width, imageData.height, {
-                    inversionAttempts: "dontInvert",
-                });
-    
-                if (code && code.data) {
-                    console.log("QR Code found:", code.data);
-                    handleConnectByCode(code.data);
-                    return; // Stop scanning loop on success (handleConnectByCode will close scanner)
+                try {
+                    const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                        inversionAttempts: "dontInvert",
+                    });
+        
+                    if (code && code.data) {
+                        console.log("QR Code found:", code.data);
+                        handleConnectByCode(code.data);
+                        return; // Stop scanning loop on success (handleConnectByCode will close scanner)
+                    }
+                } catch (e) {
+                    // Ignore transient scanning errors
                 }
             }
         }

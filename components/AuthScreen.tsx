@@ -137,21 +137,30 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
         
         if (error) throw error;
 
-        // CRITICAL FIX: Manually Insert Profile
-        // This ensures the profile exists even if the DB Trigger fails or is missing.
-        // We use upsert to avoid errors if the trigger actually worked.
+        // CRITICAL FIX: Manually Insert Profile with Fallback
         if (authData.user) {
-            const { error: profileError } = await supabase.from('profiles').upsert({
+            // Attempt 1: Full Profile
+            const fullProfile = {
                 id: authData.user.id,
                 username: finalUsername,
                 avatar_seed: `player_${Math.floor(Math.random() * 10000)}`,
                 bg_color: '#b6e3f4'
-            });
+            };
+
+            const { error: profileError } = await supabase.from('profiles').upsert(fullProfile);
 
             if (profileError) {
-                console.error("Manual profile creation failed:", profileError);
-                // We don't throw here to avoid blocking the user if auth succeeded,
-                // App.tsx has self-healing logic now too.
+                console.warn("Manual profile creation (Full) failed:", profileError.message);
+                
+                // Attempt 2: Minimal Profile (Fallback if DB schema is missing columns)
+                const { error: minError } = await supabase.from('profiles').upsert({
+                    id: authData.user.id,
+                    username: finalUsername
+                });
+                
+                if (minError) {
+                    console.error("Manual profile creation (Minimal) failed:", minError);
+                }
             }
         }
         

@@ -19,6 +19,13 @@ import { MOCK_FRIENDS, MOCK_MESSAGES, COLORS } from './constants';
 import { Friend, CardStatus } from './types';
 import { supabase } from './lib/supabaseClient';
 
+// Helper to validate UUIDs
+const isUUID = (id: string | number) => {
+    if (typeof id !== 'string') return false;
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(id);
+};
+
 const App: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<'auth' | 'home' | 'chat' | 'compose' | 'success' | 'wrong' | 'profile' | 'settings' | 'invite' | 'addFriend' | 'avatarSelect' | 'friendSelect' | 'changePassword'>('auth');
   const [selectedFriend, setSelectedFriend] = useState<Friend | null>(null);
@@ -94,41 +101,61 @@ const App: React.FC = () => {
 
   const fetchProfile = async (userId: string): Promise<boolean> => {
     try {
+        // Use select('*') instead of specific columns so it doesn't fail if schema is missing columns
         const { data, error } = await supabase
         .from('profiles')
-        .select('username, avatar_seed, bg_color')
+        .select('*') 
         .eq('id', userId)
-        .maybeSingle(); // Use maybeSingle to avoid 406 on no rows
+        .maybeSingle(); 
         
-        if (data) {
+        // Check if data exists AND has the username (minimum viable profile)
+        if (data && data.username) {
             // Update username from DB if it exists (source of truth)
-            if (data.username) setCurrentUsername(data.username);
+            setCurrentUsername(data.username);
+            
+            // Check for optional columns before using them
             if (data.avatar_seed) setCurrentUserSeed(data.avatar_seed);
             if (data.bg_color) setCurrentUserBgColor(data.bg_color);
             return true;
         } else {
-            // SELF-HEALING: Profile missing? Create it!
-            // This fixes "User Not Found" issues for users created when triggers failed.
-            console.warn("Profile missing for user. Attempting self-healing...");
+            // SELF-HEALING: Profile missing or incomplete? Create/Fix it!
+            console.warn("Profile missing or incomplete. Attempting self-healing...");
             const { data: { session } } = await supabase.auth.getSession();
             
             if (session && session.user && session.user.id === userId) {
                 const recoveryUsername = session.user.user_metadata?.username || `PLAYER_${userId.substring(0,4).toUpperCase()}`;
                 
-                // Use Upsert to prevent duplicate key errors if row exists but wasn't found (rare race condition)
-                const { error: insertError } = await supabase.from('profiles').upsert({
+                // Attempt 1: Full Profile Upsert
+                const fullProfile = {
                     id: userId,
                     username: recoveryUsername,
                     avatar_seed: `restored_${Math.floor(Math.random() * 1000)}`,
                     bg_color: '#b6e3f4'
-                });
+                };
+
+                const { error: insertError } = await supabase.from('profiles').upsert(fullProfile);
 
                 if (!insertError) {
-                    console.log("Self-healing successful: Profile created.");
+                    console.log("Self-healing successful: Full Profile created.");
                     setCurrentUsername(recoveryUsername);
                     return true;
                 } else {
-                    console.error("Self-healing failed:", insertError.message || JSON.stringify(insertError));
+                    console.warn("Full self-healing failed (possibly missing columns):", insertError.message || JSON.stringify(insertError));
+                    
+                    // Attempt 2: Minimal Profile Upsert (Fallback)
+                    // If DB is missing avatar_seed/bg_color columns, this ensures at least the USERNAME is saved so friends can find them.
+                    const { error: minError } = await supabase.from('profiles').upsert({
+                        id: userId,
+                        username: recoveryUsername
+                    });
+
+                    if (!minError) {
+                         console.log("Self-healing successful: Minimal Profile created.");
+                         setCurrentUsername(recoveryUsername);
+                         return true;
+                    } else {
+                         console.error("Self-healing failed completely:", minError.message || JSON.stringify(minError));
+                    }
                 }
             }
         }
@@ -176,7 +203,7 @@ const App: React.FC = () => {
       // 3. Fetch profiles for those IDs
       const { data: profiles, error: profError } = await supabase
         .from('profiles')
-        .select('id, username, avatar_seed, bg_color')
+        .select('*') // Use * for resilience
         .in('id', uniqueFriendIds);
 
       if (profError) {
@@ -253,12 +280,6 @@ const App: React.FC = () => {
       setFriends(prev => prev.filter(f => f.id !== friendId));
       
       if (session) {
-           const isUUID = (id: string | number) => {
-                if (typeof id !== 'string') return false;
-                const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-                return uuidRegex.test(id);
-            };
-
             if (isUUID(friendId)) {
                 // Delete friendship in DB (Messages usually cascade delete or can remain orphan depending on schema, 
                 // but here we just break the link)
@@ -277,13 +298,6 @@ const App: React.FC = () => {
       setFriends(prev => [newFriend, ...prev]);
       
       if (session) {
-        // Validate if ID is a valid UUID before database operation
-        const isUUID = (id: string | number) => {
-            if (typeof id !== 'string') return false;
-            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-            return uuidRegex.test(id);
-        };
-
         if (!isUUID(newFriend.id)) {
             console.log("Skipping DB insert for non-UUID friend (mock/demo data):", newFriend.id);
             return;
