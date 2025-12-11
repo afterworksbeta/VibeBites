@@ -98,7 +98,7 @@ const App: React.FC = () => {
         .from('profiles')
         .select('username, avatar_seed, bg_color')
         .eq('id', userId)
-        .single();
+        .maybeSingle(); // Use maybeSingle to avoid 406 on no rows
         
         if (data) {
             // Update username from DB if it exists (source of truth)
@@ -106,9 +106,34 @@ const App: React.FC = () => {
             if (data.avatar_seed) setCurrentUserSeed(data.avatar_seed);
             if (data.bg_color) setCurrentUserBgColor(data.bg_color);
             return true;
+        } else {
+            // SELF-HEALING: Profile missing? Create it!
+            // This fixes "User Not Found" issues for users created when triggers failed.
+            console.warn("Profile missing for user. Attempting self-healing...");
+            const { data: { session } } = await supabase.auth.getSession();
+            
+            if (session && session.user && session.user.id === userId) {
+                const recoveryUsername = session.user.user_metadata?.username || `PLAYER_${userId.substring(0,4).toUpperCase()}`;
+                
+                const { error: insertError } = await supabase.from('profiles').insert({
+                    id: userId,
+                    username: recoveryUsername,
+                    avatar_seed: `restored_${Math.floor(Math.random() * 1000)}`,
+                    bg_color: '#b6e3f4'
+                });
+
+                if (!insertError) {
+                    console.log("Self-healing successful: Profile created.");
+                    setCurrentUsername(recoveryUsername);
+                    return true;
+                } else {
+                    console.error("Self-healing failed:", insertError);
+                }
+            }
         }
         return false;
     } catch (e) {
+        console.error("Profile fetch error:", e);
         return false;
     }
   };

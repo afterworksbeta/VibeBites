@@ -68,7 +68,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
           .maybeSingle(); // Returns null if not found, object if found
       
       if (error && error.code !== 'PGRST116') {
-          console.error("Error checking username:", error);
           // If error (network etc), assume available to let backend constraint handle it, or block.
           // Blocking is safer to prevent UI confusion.
           return false; 
@@ -125,7 +124,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
         }
 
         // 3. Sign Up
-        const { error } = await supabase.auth.signUp({
+        const { data: authData, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -136,6 +135,24 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
         });
         
         if (error) throw error;
+
+        // CRITICAL FIX: Manually Insert Profile
+        // This ensures the profile exists even if the DB Trigger fails or is missing.
+        // We use upsert to avoid errors if the trigger actually worked.
+        if (authData.user) {
+            const { error: profileError } = await supabase.from('profiles').upsert({
+                id: authData.user.id,
+                username: finalUsername,
+                avatar_seed: `player_${Math.floor(Math.random() * 10000)}`,
+                bg_color: '#b6e3f4'
+            });
+
+            if (profileError) {
+                console.error("Manual profile creation failed:", profileError);
+                // We don't throw here to avoid blocking the user if auth succeeded,
+                // App.tsx has self-healing logic now too.
+            }
+        }
         
         // Auto login handling or waiting for email confirmation depends on settings
         // For this demo, assuming auto-confirm or immediate login
