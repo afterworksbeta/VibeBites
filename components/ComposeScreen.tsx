@@ -91,31 +91,30 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
     const { data: { user } } = await supabase.auth.getUser();
     
     if (user) {
-        // We'll pack the metadata into the emojis column or extra fields if available
-        // For this implementation, we assume we can pass them in the payload
+        // WORKAROUND: Pack metadata into 'text' column as JSON
+        // This avoids "column does not exist" errors if 'emojis', 'topic', etc. are missing in DB schema.
+        const packedPayload = JSON.stringify({
+            text: text,
+            emojis: analysis.emojis,
+            topic: analysis.topic,
+            difficulty: analysis.difficulty,
+            points: analysis.points
+        });
+
         const { error } = await supabase.from('messages').insert({
             sender_id: user.id,
             receiver_id: friend.id,
-            text: text,
-            emojis: analysis.emojis,
-            // Assuming we can leverage a flexible schema or we pack topic into emojis for now
-            // In a real app with migrations, we'd add columns. 
-            // Here we just send what we can. 
-            // If the DB doesn't support 'topic' column, this might be ignored, 
-            // but the frontend logic is ready.
-            type: 'INCOMING_UNSOLVED', // Metadata hint
+            text: packedPayload, // Store JSON string here
+            // emojis: analysis.emojis, // REMOVED to prevent schema error
+            type: 'INCOMING_UNSOLVED', 
             status: 'SENT'
         });
 
-        // NOTE: Since we can't easily run migrations in this environment, 
-        // the 'topic' might not persist unless we stringify it into emojis or similar.
-        // But the UI flow is implemented as requested.
-
         if (error) {
-            console.error("Send failed", error);
-            // alert("Send failed!"); 
-            // Proceed anyway for demo
-             onBack();
+            // Improved error logging
+            console.error("Send failed", error.message || JSON.stringify(error));
+            alert("SEND FAILED: " + (error.message || "Unknown Error")); 
+            // Don't go back if failed, so user can retry
         } else {
             onBack();
         }

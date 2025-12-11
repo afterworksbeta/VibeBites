@@ -32,17 +32,45 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
   const [isSending, setIsSending] = useState(false);
 
   // Helper to map DB row to Message type
-  const mapToMessage = (m: any, currentUserId: string): Message => ({
-    id: m.id,
-    type: m.sender_id === currentUserId ? MessageType.OUTGOING : MessageType.INCOMING_UNSOLVED,
-    text: m.text,
-    emojis: m.emojis || [],
-    time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    status: m.status,
-    sender_id: m.sender_id,
-    topic: m.topic || undefined,
-    difficulty: m.difficulty || undefined
-  });
+  // UPDATED: Now supports reading JSON from 'text' column if 'emojis' column is missing/unused
+  const mapToMessage = (m: any, currentUserId: string): Message => {
+    let content = m.text;
+    let emojiList = m.emojis || [];
+    let topic = m.topic;
+    let difficulty = m.difficulty;
+
+    // PROTOCOL: Check if text contains encoded JSON data (Workaround for limited DB schema)
+    if (typeof content === 'string' && content.trim().startsWith('{')) {
+        try {
+            const parsed = JSON.parse(content);
+            // Verify it looks like our packed payload
+            if (parsed && typeof parsed === 'object') {
+                // If it has 'emojis' or 'topic', we assume it's a packed message
+                if (parsed.text !== undefined) content = parsed.text;
+                if (Array.isArray(parsed.emojis)) emojiList = parsed.emojis;
+                if (parsed.topic) topic = parsed.topic;
+                if (parsed.difficulty) difficulty = parsed.difficulty;
+            }
+        } catch (e) {
+            // Not JSON or parse failed, treat as plain text
+        }
+    }
+
+    return {
+        id: m.id,
+        type: m.sender_id === currentUserId ? MessageType.OUTGOING : MessageType.INCOMING_UNSOLVED,
+        text: content || '',
+        emojis: emojiList,
+        // Safe date handling: fallback to empty string if created_at is missing
+        time: m.created_at 
+            ? new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            : '', 
+        status: m.status,
+        sender_id: m.sender_id,
+        topic: topic || undefined,
+        difficulty: difficulty || undefined
+    };
+  };
 
   const fetchMessages = async (currentUserId: string) => {
     if (!isUUID(friend.id)) {
@@ -56,10 +84,10 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
         .from('messages')
         .select('*')
         .or(`and(sender_id.eq.${currentUserId},receiver_id.eq.${friend.id}),and(sender_id.eq.${friend.id},receiver_id.eq.${currentUserId})`)
-        .order('created_at', { ascending: true });
+        .order('id', { ascending: true }); // Changed from created_at to id to avoid missing column error
 
     if (error) {
-        console.error("Error fetching messages:", error.message);
+        console.error("Error fetching messages:", error.message || JSON.stringify(error));
     } else if (data) {
         // Smart Merge: Keep "SENDING" messages that are local-only
         setChatMessages(prev => {
@@ -67,7 +95,6 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
             const localPending = prev.filter(m => m.status === 'SENDING');
             
             // Avoid duplicates if a pending message was just fetched
-            // (Though usually pending has temp ID vs DB ID, so they are distinct until we resolve them)
             return [...dbMessages, ...localPending];
         });
     }
@@ -198,21 +225,27 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
         return;
     }
 
+    // Prepare Payload: Pack emojis into 'text' column if present
+    let dbPayload = text;
+    if (emojis && emojis.length > 0) {
+        dbPayload = JSON.stringify({ text, emojis });
+    }
+
     // 2. Send to DB and SELECT returned row
     const { data, error } = await supabase
         .from('messages')
         .insert({
             sender_id: userId,
             receiver_id: friend.id,
-            text: text,
-            emojis: emojis,
+            text: dbPayload, // Using text column for everything
+            // emojis: emojis, // REMOVED to avoid schema error
             status: 'SENT'
         })
         .select()
         .single();
     
     if (error) {
-        console.error("Failed to send message", error.message);
+        console.error("Failed to send message", error.message || JSON.stringify(error));
         // Mark as failed
         setChatMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'FAILED' } : m));
     } else if (data) {
