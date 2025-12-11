@@ -435,7 +435,7 @@ export const AddFriendScreen: React.FC<AddFriendScreenProps> = ({
                         type="text" 
                         value={codeInput}
                         onChange={(e) => setCodeInput(e.target.value)}
-                        className="w-full h-[64px] bg-white border-[4px] border-black shadow-[6px_6px_0_0_black] px-4 text-center text-[16px] uppercase font-bold outline-none placeholder:text-gray-300"
+                        className="w-full h-[64px] bg-white border-[4px] border-black shadow-[6px_6px_0_0_black] px-4 text-center text-[16px] uppercase font-bold outline-none placeholder:text-gray-300 text-black"
                         placeholder="ENTER CODE"
                     />
                 </div>
@@ -552,4 +552,4 @@ export const AddFriendScreen: React.FC<AddFriendScreenProps> = ({
 
     </div>
   );
-};
+}
