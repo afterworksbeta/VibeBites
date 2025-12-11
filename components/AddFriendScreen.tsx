@@ -59,7 +59,6 @@ export const AddFriendScreen: React.FC<AddFriendScreenProps> = ({
   }, [startScanning]);
 
   // --- HELPER: ADD FRIEND ---
-  // Defined early to avoid hoisting issues
   const handleAdd = (result: SearchResult) => {
     if (addedIds.has(result.id)) return;
 
@@ -80,7 +79,8 @@ export const AddFriendScreen: React.FC<AddFriendScreenProps> = ({
 
   // --- TAB 1: USERNAME SEARCH LOGIC ---
   useEffect(() => {
-    if (!searchText.trim() || activeTab !== 'USERNAME') {
+    const trimmedSearch = searchText.trim();
+    if (!trimmedSearch || activeTab !== 'USERNAME') {
         setSearchResults([]);
         return;
     }
@@ -91,7 +91,7 @@ export const AddFriendScreen: React.FC<AddFriendScreenProps> = ({
             let query = supabase
                 .from('profiles')
                 .select('*')
-                .ilike('username', `%${searchText}%`)
+                .ilike('username', `%${trimmedSearch}%`) // Case-insensitive partial match
                 .limit(10);
             
             // Exclude current user if possible
@@ -125,7 +125,7 @@ export const AddFriendScreen: React.FC<AddFriendScreenProps> = ({
     return () => clearTimeout(timer);
   }, [searchText, activeTab, currentUserId]);
 
-  // --- TAB 2: CODE ENTRY LOGIC (FIXED) ---
+  // --- TAB 2: CODE ENTRY LOGIC ---
   const handleConnectByCode = async (rawInput: string) => {
     const input = rawInput.trim();
     if (!input) return;
@@ -146,7 +146,7 @@ export const AddFriendScreen: React.FC<AddFriendScreenProps> = ({
         const { data, error } = await supabase
             .from('profiles')
             .select('*')
-            .ilike('username', searchVal); 
+            .ilike('username', searchVal); // Case-insensitive exact match
 
         if (error) {
             throw error;
@@ -177,7 +177,7 @@ export const AddFriendScreen: React.FC<AddFriendScreenProps> = ({
              setIsScanning(false); // Close scanner if open
              setActiveTab('CODE'); // Switch to code tab so user sees success message
         } else {
-             setCodeError(`USER '${searchVal.toUpperCase()}' NOT FOUND`);
+             setCodeError(`USER '${searchVal}' NOT FOUND`);
              setIsScanning(false);
              setActiveTab('CODE'); 
         }
@@ -348,7 +348,7 @@ export const AddFriendScreen: React.FC<AddFriendScreenProps> = ({
                     value={searchText}
                     onChange={(e) => setSearchText(e.target.value)}
                     placeholder="TYPE USERNAME..."
-                    className="flex-1 h-full bg-transparent outline-none text-[12px] uppercase font-['Press_Start_2P'] text-white placeholder:text-gray-500"
+                    className="flex-1 h-full bg-transparent outline-none text-[12px] font-['Press_Start_2P'] text-white placeholder:text-gray-500"
                     autoFocus
                     />
                     {searchText && (
@@ -416,7 +416,7 @@ export const AddFriendScreen: React.FC<AddFriendScreenProps> = ({
                         type="text" 
                         value={codeInput}
                         onChange={(e) => setCodeInput(e.target.value)}
-                        className="w-full h-[64px] bg-white border-[4px] border-black shadow-[6px_6px_0_0_black] px-4 text-center text-[16px] uppercase font-bold outline-none placeholder:text-gray-300 text-black"
+                        className="w-full h-[64px] bg-white border-[4px] border-black shadow-[6px_6px_0_0_black] px-4 text-center text-[16px] font-bold outline-none placeholder:text-gray-300 text-black"
                         placeholder="ENTER CODE"
                     />
                 </div>

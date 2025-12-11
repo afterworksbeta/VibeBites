@@ -115,7 +115,8 @@ const App: React.FC = () => {
             if (session && session.user && session.user.id === userId) {
                 const recoveryUsername = session.user.user_metadata?.username || `PLAYER_${userId.substring(0,4).toUpperCase()}`;
                 
-                const { error: insertError } = await supabase.from('profiles').insert({
+                // Use Upsert to prevent duplicate key errors if row exists but wasn't found (rare race condition)
+                const { error: insertError } = await supabase.from('profiles').upsert({
                     id: userId,
                     username: recoveryUsername,
                     avatar_seed: `restored_${Math.floor(Math.random() * 1000)}`,
@@ -127,13 +128,13 @@ const App: React.FC = () => {
                     setCurrentUsername(recoveryUsername);
                     return true;
                 } else {
-                    console.error("Self-healing failed:", insertError);
+                    console.error("Self-healing failed:", insertError.message || JSON.stringify(insertError));
                 }
             }
         }
         return false;
-    } catch (e) {
-        console.error("Profile fetch error:", e);
+    } catch (e: any) {
+        console.error("Profile fetch error:", e.message || e);
         return false;
     }
   };

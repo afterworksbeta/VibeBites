@@ -101,13 +101,14 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
         // REGISTRATION FLOW
         
         // 1. Determine Username
-        let finalUsername = username.trim().toUpperCase();
+        // ALLOW MIXED CASE: Don't force toUpperCase here so "Bubu" is saved as "Bubu".
+        let finalUsername = username.trim(); 
         
         if (!finalUsername) {
             finalUsername = generateRandomUsername();
         }
 
-        // 2. Pre-check availability
+        // 2. Pre-check availability (Case insensitive)
         const available = await checkUsernameAvailable(finalUsername);
         if (!available) {
             // If user typed it, tell them. If generated, try one more time or fail.
@@ -233,8 +234,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
                         placeholder="LEAVE BLANK FOR AUTO"
-                        className="h-[48px] bg-white border-[4px] border-black rounded-lg px-3 text-[12px] text-black outline-none focus:border-[#2196F3] transition-colors placeholder:text-gray-400 font-['Press_Start_2P'] uppercase"
+                        className="h-[48px] bg-white border-[4px] border-black rounded-lg px-3 text-[12px] text-black outline-none focus:border-[#2196F3] transition-colors placeholder:text-gray-400 font-['Press_Start_2P']" 
                     />
+                    {/* Removed 'uppercase' class so user sees real case */}
                     <span className="text-[8px] text-black/50">*MUST BE UNIQUE TO YOU</span>
                 </div>
             )}
