@@ -31,7 +31,7 @@ const App: React.FC = () => {
   // State for current user
   const [currentUserSeed, setCurrentUserSeed] = useState('currentUser_player1');
   const [currentUserBgColor, setCurrentUserBgColor] = useState('#b6e3f4');
-  const [currentUsername, setCurrentUsername] = useState(''); // Initial empty to show loading
+  const [currentUsername, setCurrentUsername] = useState(''); // Initial empty
 
   // Scanner state
   const [startScanning, setStartScanning] = useState(false);
@@ -42,7 +42,13 @@ const App: React.FC = () => {
       setSession(session);
       if (session) {
         setCurrentScreen('home');
-        fetchProfile(session.user.id);
+        
+        // IMMEDIATE: Set username from metadata if available (faster than DB fetch)
+        if (session.user?.user_metadata?.username) {
+            setCurrentUsername(session.user.user_metadata.username);
+        }
+
+        fetchProfileWithRetry(session.user.id);
         fetchFriends(session.user.id);
       } else {
         setCurrentScreen('auth');
@@ -55,6 +61,12 @@ const App: React.FC = () => {
       setSession(session);
       if (session) {
         setCurrentScreen('home');
+        
+        // IMMEDIATE: Set username from metadata if available (faster than DB fetch)
+        if (session.user?.user_metadata?.username) {
+            setCurrentUsername(session.user.user_metadata.username);
+        }
+
         // Add a small delay/retry for profile fetch as DB trigger might be slightly delayed on signup
         fetchProfileWithRetry(session.user.id);
         fetchFriends(session.user.id);
@@ -89,10 +101,11 @@ const App: React.FC = () => {
         .single();
         
         if (data) {
-        if (data.username) setCurrentUsername(data.username);
-        if (data.avatar_seed) setCurrentUserSeed(data.avatar_seed);
-        if (data.bg_color) setCurrentUserBgColor(data.bg_color);
-        return true;
+            // Update username from DB if it exists (source of truth)
+            if (data.username) setCurrentUsername(data.username);
+            if (data.avatar_seed) setCurrentUserSeed(data.avatar_seed);
+            if (data.bg_color) setCurrentUserBgColor(data.bg_color);
+            return true;
         }
         return false;
     } catch (e) {

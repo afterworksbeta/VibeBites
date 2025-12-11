@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Gift, Copy, Check, Download } from 'lucide-react';
+import { ArrowLeft, Gift, Copy, Check, Download, Loader } from 'lucide-react';
 import { PixelSprite } from './PixelSprite';
 
 interface InviteScreenProps {
@@ -11,12 +11,16 @@ interface InviteScreenProps {
 export const InviteScreen: React.FC<InviteScreenProps> = ({ onBack, currentUserId, currentUsername }) => {
   const [copied, setCopied] = useState(false);
 
-  // Generate a code from Username to ensure AddFriendScreen can find it by username
-  const uniqueCode = currentUsername 
-    ? `VB-${currentUsername.toUpperCase()}`
-    : 'VB-GUEST';
+  // If username is empty string, we are loading. Don't fallback to GUEST blindly.
+  const isLoading = !currentUsername;
+  
+  const uniqueCode = isLoading 
+    ? 'LOADING...'
+    : `VB-${currentUsername!.toUpperCase()}`;
 
   const handleCopy = () => {
+    if (isLoading) return;
+    
     if (navigator.clipboard) {
         navigator.clipboard.writeText(uniqueCode);
     }
@@ -37,20 +41,26 @@ export const InviteScreen: React.FC<InviteScreenProps> = ({ onBack, currentUserI
         <div className="absolute bottom-[-6px] left-[-6px] w-6 h-6 border-b-[8px] border-l-[8px] border-black" />
         <div className="absolute bottom-[-6px] right-[-6px] w-6 h-6 border-b-[8px] border-r-[8px] border-black" />
 
-        {/* Real QR Code Image */}
-        <div className="w-full h-full relative">
-            <img 
-                src={qrUrl} 
-                alt="QR Code" 
-                className="w-full h-full object-contain pixelated" 
-                style={{ imageRendering: 'pixelated' }}
-            />
-            
-            {/* Center Logo Overlay */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 bg-[#FFD740] border-[3px] border-black flex items-center justify-center z-10 shadow-sm">
-                <span className="text-[14px] font-bold text-black font-['Press_Start_2P'] tracking-tighter">VB</span>
+        {/* QR Content */}
+        {isLoading ? (
+             <div className="w-full h-full flex items-center justify-center bg-gray-100">
+                  <Loader className="animate-spin text-black" size={32} />
+             </div>
+        ) : (
+             <div className="w-full h-full relative">
+                <img 
+                    src={qrUrl} 
+                    alt="QR Code" 
+                    className="w-full h-full object-contain pixelated" 
+                    style={{ imageRendering: 'pixelated' }}
+                />
+                
+                {/* Center Logo Overlay */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 bg-[#FFD740] border-[3px] border-black flex items-center justify-center z-10 shadow-sm">
+                    <span className="text-[14px] font-bold text-black font-['Press_Start_2P'] tracking-tighter">VB</span>
+                </div>
             </div>
-        </div>
+        )}
       </div>
     );
   };
@@ -105,7 +115,7 @@ export const InviteScreen: React.FC<InviteScreenProps> = ({ onBack, currentUserI
          
          {/* Code Box */}
          <div className="bg-black border-[5px] border-white p-4 rounded-xl shadow-[6px_6px_0_0_white] mb-4 w-full max-w-xs flex justify-center relative">
-             <span className="text-[#FFD740] text-[20px] md:text-[24px] font-mono font-bold tracking-[2px] break-all text-center">
+             <span className={`text-[#FFD740] text-[20px] md:text-[24px] font-mono font-bold tracking-[2px] break-all text-center ${isLoading ? 'animate-pulse' : ''}`}>
                 {uniqueCode}<span className="animate-pulse text-white">|</span>
              </span>
          </div>
@@ -113,7 +123,8 @@ export const InviteScreen: React.FC<InviteScreenProps> = ({ onBack, currentUserI
          {/* Copy Button */}
          <button 
             onClick={handleCopy}
-            className={`h-[48px] w-[70%] border-[4px] border-black shadow-[4px_4px_0_0_black] flex items-center justify-center gap-2 active:translate-y-[2px] active:shadow-[2px_2px_0_0_black] transition-all ${copied ? 'bg-[#00E676]' : 'bg-[#FFD740]'}`}
+            disabled={isLoading}
+            className={`h-[48px] w-[70%] border-[4px] border-black shadow-[4px_4px_0_0_black] flex items-center justify-center gap-2 active:translate-y-[2px] active:shadow-[2px_2px_0_0_black] transition-all disabled:opacity-50 disabled:cursor-not-allowed ${copied ? 'bg-[#00E676]' : 'bg-[#FFD740]'}`}
          >
              {copied ? <Check size={20} color="black" strokeWidth={4} /> : <Copy size={20} color="black" strokeWidth={4} />}
              <span className="text-black text-[12px] font-bold uppercase">{copied ? "COPIED! ✓" : "COPY CODE"}</span>
@@ -132,7 +143,8 @@ export const InviteScreen: React.FC<InviteScreenProps> = ({ onBack, currentUserI
          </div>
 
          <button 
-            className="h-[48px] w-[70%] bg-[#2196F3] border-[4px] border-black shadow-[4px_4px_0_0_black] flex items-center justify-center gap-2 active:translate-y-[2px] active:shadow-[2px_2px_0_0_black] transition-all"
+            disabled={isLoading}
+            className="h-[48px] w-[70%] bg-[#2196F3] border-[4px] border-black shadow-[4px_4px_0_0_black] flex items-center justify-center gap-2 active:translate-y-[2px] active:shadow-[2px_2px_0_0_black] transition-all disabled:opacity-50"
          >
              <Download size={20} color="white" strokeWidth={4} />
              <span className="text-white text-[12px] font-bold uppercase">SAVE QR</span>

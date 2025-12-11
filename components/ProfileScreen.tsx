@@ -2,7 +2,7 @@ import React from 'react';
 import { COLORS } from '../constants';
 import { PixelAvatar } from './PixelAvatar';
 import { PixelSprite } from './PixelSprite';
-import { ArrowLeft, Settings, ArrowRight, Lock, Camera } from 'lucide-react';
+import { ArrowLeft, Settings, ArrowRight, Lock, Camera, Loader } from 'lucide-react';
 
 interface ProfileScreenProps {
   onBack: () => void;
@@ -21,7 +21,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onEditProfile,
   currentSeed = "currentUser_player1",
   currentBgColor,
-  username = "PLAYER"
+  username = ""
 }) => {
 
   const handleAvatarClick = () => {
@@ -29,6 +29,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         onEditProfile();
     }
   };
+
+  const displayUsername = username || "...";
 
   return (
     <div className="flex flex-col h-full w-full bg-white font-['Press_Start_2P'] overflow-y-auto scrollbar-hide">
@@ -88,7 +90,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         {/* Username */}
         <div className="relative bg-[#FFD740] border-[4px] border-black px-4 py-2 shadow-[4px_4px_0_0_#000000] mb-3">
              <div className="absolute inset-[2px] border-[2px] border-white pointer-events-none"></div>
-             <h1 className="text-[18px] text-black uppercase relative z-10">{username}</h1>
+             <h1 className="text-[18px] text-black uppercase relative z-10">
+                {displayUsername}
+             </h1>
         </div>
 
         {/* Level Tag */}
