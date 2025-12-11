@@ -63,7 +63,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
         }
     }
 
-    // Use sent_at as the source of truth for time (database schema compliance)
+    // Use sent_at as the source of truth for time
     const timeSource = m.sent_at;
 
     return {
@@ -96,7 +96,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
         // Use exact formatting for Supabase/PostgREST
         const filter = `and(sender_id.eq.${currentUserId},receiver_id.eq.${friend.id}),and(sender_id.eq.${friend.id},receiver_id.eq.${currentUserId})`;
 
-        // Use sent_at for sorting (Schema Fix: created_at does not exist)
+        // Use sent_at for sorting (Schema Fix)
         const { data, error } = await supabase
             .from('messages')
             .select('*')
