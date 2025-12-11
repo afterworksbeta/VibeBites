@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, ScanLine, Search, X, UserPlus, Check, Share, QrCode, CameraOff, Loader, Keyboard } from 'lucide-react';
+import { ArrowLeft, ScanLine, Search, X, UserPlus, Check, QrCode, CameraOff, Loader, Keyboard } from 'lucide-react';
 import { COLORS } from '../constants';
 import { PixelAvatar } from './PixelAvatar';
 import { Friend, CardStatus } from '../types';
@@ -49,7 +49,7 @@ export const AddFriendScreen: React.FC<AddFriendScreenProps> = ({
   const [permissionDenied, setPermissionDenied] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const requestRef = useRef<number>();
+  const requestRef = useRef<number | null>(null);
 
   // Ensure isScanning updates if prop changes
   useEffect(() => {
@@ -57,6 +57,26 @@ export const AddFriendScreen: React.FC<AddFriendScreenProps> = ({
         setIsScanning(true);
     }
   }, [startScanning]);
+
+  // --- HELPER: ADD FRIEND ---
+  // Defined early to avoid hoisting issues
+  const handleAdd = (result: SearchResult) => {
+    if (addedIds.has(result.id)) return;
+
+    setAddedIds(prev => new Set(prev).add(result.id));
+    
+    // Convert to Friend object
+    const newFriend: Friend = {
+        id: result.id, // Real UUID
+        name: result.name,
+        status: CardStatus.NEW_VIBE,
+        statusIcon: '👋',
+        time: 'JUST NOW',
+        color: COLORS.BLUE, 
+        avatarSeed: result.avatarSeed
+    };
+    onAddFriend(newFriend);
+  };
 
   // --- TAB 1: USERNAME SEARCH LOGIC ---
   useEffect(() => {
@@ -114,33 +134,34 @@ export const AddFriendScreen: React.FC<AddFriendScreenProps> = ({
     setCodeError(null);
     setCodeSuccess(null);
 
-    // 1. Clean Code (Support "VB-USERNAME" or just "USERNAME")
-    let searchVal = input;
-    if (searchVal.toUpperCase().startsWith('VB-')) {
-        searchVal = searchVal.substring(3); // Remove VB- prefix to search by username
-    }
-
-    console.log("Searching for:", searchVal);
+    // 1. Clean Code: Robustly remove "VB-" prefix (case insensitive)
+    // "VB-BUBU" -> "BUBU", "vb-bubu" -> "bubu", "BUBU" -> "BUBU"
+    const searchVal = input.replace(/^vb-/i, '');
+    
+    console.log(`Searching DB for username: '${searchVal}'`);
 
     try {
-        // 2. Search Supabase by Username (exact)
-        let query = supabase
+        // 2. Search Supabase by Username (exact case-insensitive match)
+        // Ensure we find a single user
+        const { data, error } = await supabase
             .from('profiles')
             .select('*')
             .ilike('username', searchVal); 
 
-        const { data, error } = await query;
+        if (error) {
+            throw error;
+        }
 
         if (data && data.length > 0) {
              const user = data[0];
              
-             if (user.id === currentUserId) {
+             if (currentUserId && user.id === currentUserId) {
                  setCodeError("CANNOT ADD YOURSELF!");
                  setLoadingCode(false);
                  return;
              }
 
-             // Found!
+             // Found! Add them.
              handleAdd({
                  id: user.id,
                  name: user.username,
@@ -156,13 +177,13 @@ export const AddFriendScreen: React.FC<AddFriendScreenProps> = ({
              setIsScanning(false); // Close scanner if open
              setActiveTab('CODE'); // Switch to code tab so user sees success message
         } else {
-             setCodeError("USER NOT FOUND");
-             setIsScanning(false); // Close scanner on error so user can see/retry manually
+             setCodeError(`USER '${searchVal.toUpperCase()}' NOT FOUND`);
+             setIsScanning(false);
              setActiveTab('CODE'); 
         }
     } catch (e: any) {
         console.error("Code search error:", e);
-        setCodeError("ERROR SEARCHING DB");
+        setCodeError("DB SEARCH FAILED");
         setIsScanning(false);
         setActiveTab('CODE');
     } finally {
@@ -170,52 +191,7 @@ export const AddFriendScreen: React.FC<AddFriendScreenProps> = ({
     }
   };
 
-  // --- COMMON: ADD FRIEND LOGIC ---
-  const handleAdd = (result: SearchResult) => {
-    if (addedIds.has(result.id)) return;
-
-    setAddedIds(prev => new Set(prev).add(result.id));
-    
-    // Convert to Friend object
-    const newFriend: Friend = {
-        id: result.id, // Real UUID
-        name: result.name,
-        status: CardStatus.NEW_VIBE,
-        statusIcon: '👋',
-        time: 'JUST NOW',
-        color: COLORS.BLUE, 
-        avatarSeed: result.avatarSeed
-    };
-    onAddFriend(newFriend);
-  };
-
   const clearSearch = () => setSearchText('');
-
-  const handleShareCode = async () => {
-      const uniqueCode = currentUserId 
-        ? `VB-${currentUserId.slice(0, 5).toUpperCase()}`
-        : 'VB-GUEST';
-        
-      if (navigator.share) {
-          try {
-              await navigator.share({
-                  title: 'VibeBites Invite',
-                  text: `Let's vibe! Add me on VibeBites: ${uniqueCode}`,
-                  url: window.location.origin
-              });
-          } catch (err) {
-              console.log('Share canceled', err);
-          }
-      } else {
-          // Fallback for desktop/unsupported browsers
-          if (navigator.clipboard) {
-              await navigator.clipboard.writeText(uniqueCode);
-              alert(`CODE ${uniqueCode} COPIED!`);
-          } else {
-              alert(`YOUR CODE IS: ${uniqueCode}`);
-          }
-      }
-  };
 
   // --- REAL QR SCANNER LOGIC ---
   const scanFrame = () => {
@@ -230,14 +206,18 @@ export const AddFriendScreen: React.FC<AddFriendScreenProps> = ({
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const code = jsQR(imageData.data, imageData.width, imageData.height, {
-                inversionAttempts: "dontInvert",
-            });
-
-            if (code) {
-                console.log("QR Code found:", code.data);
-                handleConnectByCode(code.data);
-                return; // Stop scanning loop on success (handleConnectByCode will close scanner)
+            
+            // Check if jsQR loaded correctly
+            if (jsQR) {
+                const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                    inversionAttempts: "dontInvert",
+                });
+    
+                if (code && code.data) {
+                    console.log("QR Code found:", code.data);
+                    handleConnectByCode(code.data);
+                    return; // Stop scanning loop on success (handleConnectByCode will close scanner)
+                }
             }
         }
     }
@@ -294,6 +274,7 @@ export const AddFriendScreen: React.FC<AddFriendScreenProps> = ({
       if (stream) {
         stream.getTracks().forEach(track => track.stop());
       }
+      // Also stop the tracks on the video element if they were assigned
       if (videoRef.current && videoRef.current.srcObject) {
          const s = videoRef.current.srcObject as MediaStream;
          s.getTracks().forEach(track => track.stop());
@@ -441,13 +422,13 @@ export const AddFriendScreen: React.FC<AddFriendScreenProps> = ({
                 </div>
 
                 {codeError && (
-                    <div className="bg-[#FF5252] text-white text-[10px] p-2 border-2 border-black shadow-[2px_2px_0_0_black]">
+                    <div className="bg-[#FF5252] text-white text-[10px] p-2 border-2 border-black shadow-[2px_2px_0_0_black] w-full text-center">
                         {codeError}
                     </div>
                 )}
                 
                 {codeSuccess && (
-                    <div className="bg-[#00E676] text-black text-[10px] p-2 border-2 border-black shadow-[2px_2px_0_0_black] flex items-center gap-2">
+                    <div className="bg-[#00E676] text-black text-[10px] p-2 border-2 border-black shadow-[2px_2px_0_0_black] flex items-center gap-2 w-full justify-center">
                         <Check size={12} /> {codeSuccess}
                     </div>
                 )}
@@ -552,4 +533,4 @@ export const AddFriendScreen: React.FC<AddFriendScreenProps> = ({
 
     </div>
   );
-}
+};
