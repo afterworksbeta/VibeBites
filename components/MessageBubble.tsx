@@ -36,7 +36,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, friend })
           </div>
           
           <div className="flex justify-between items-end mt-2">
-            <span className="text-[#FFD740] text-[10px] font-bold tracking-wider">{message.text}</span>
+            <span className="text-[#FFD740] text-[10px] font-bold tracking-wider">TAP 2 SOLVE!</span>
             <span className="text-black/70 text-[8px] font-bold">{message.time}</span>
           </div>
         </div>

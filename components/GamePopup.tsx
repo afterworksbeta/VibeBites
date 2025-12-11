@@ -3,7 +3,7 @@ import { COLORS } from '../constants';
 import { PixelAvatar } from './PixelAvatar';
 import { PixelSprite } from './PixelSprite';
 import { Friend, Message } from '../types';
-import { X, Lightbulb, ChevronLeft, ChevronRight, Tag } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Lightbulb } from 'lucide-react';
 
 interface GamePopupProps {
   friend: Friend;
@@ -16,7 +16,7 @@ interface GamePopupProps {
 export const GamePopup: React.FC<GamePopupProps> = ({ friend, message, onClose, onWin, onLoss }) => {
   const [isPaused, setIsPaused] = useState(false);
   const [scrollPos, setScrollPos] = useState(0);
-  const [showTopic, setShowTopic] = useState(false);
+  const [showHint, setShowHint] = useState(false); // Changed from showTopic to showHint
   const [currentSet, setCurrentSet] = useState(0);
 
   // Dynamic Content Logic
@@ -27,13 +27,13 @@ export const GamePopup: React.FC<GamePopupProps> = ({ friend, message, onClose, 
 
   const spriteSets = dynamicSprites;
 
-  // Dynamic topics
-  const dynamicTopic = message?.topic ? `TOPIC: ${message.topic}` : "TOPIC: MYSTERY";
-  const defaultTopics = ["TOPIC: RUSH HOUR", "TOPIC: MORNING VIBES"];
+  // Dynamic Hints
+  const dynamicHint = message?.hint ? `HINT: ${message.hint}` : "HINT: GUESS THE VIBE";
+  const defaultHints = ["HINT: RUSH HOUR", "HINT: MORNING VIBES"];
   
-  const topicMessages = message?.emojis && message.emojis.length > 0
-      ? [dynamicTopic]
-      : defaultTopics;
+  const hintMessages = message?.emojis && message.emojis.length > 0
+      ? [dynamicHint]
+      : defaultHints;
 
   // Retro scrolling loop
   useEffect(() => {
@@ -111,11 +111,11 @@ export const GamePopup: React.FC<GamePopupProps> = ({ friend, message, onClose, 
            <div className="absolute inset-0 border-[5px] border-black pointer-events-none z-10"></div>
            <div className="absolute inset-[5px] border-[2px] border-white pointer-events-none z-10"></div>
 
-           {/* Blinking Instruction / Topic */}
-           <div className={`z-20 bg-black px-3 py-1 border-2 border-yellow-400 mt-2 max-w-full text-center transition-all ${showTopic ? 'animate-none' : 'animate-pulse'}`}>
+           {/* Blinking Instruction / Hint */}
+           <div className={`z-20 bg-black px-3 py-1 border-2 border-yellow-400 mt-2 max-w-full text-center transition-all ${showHint ? 'animate-none' : 'animate-pulse'}`}>
               <span className="text-[#FFD740] text-[10px] uppercase tracking-widest leading-relaxed">
-                 {showTopic 
-                    ? topicMessages[currentSet] 
+                 {showHint 
+                    ? hintMessages[currentSet] 
                     : (isPaused ? ">>> RELEASE 2 GO <<<" : ">>> TAP 2 PAUSE <<<")
                  }
               </span>
@@ -176,11 +176,11 @@ export const GamePopup: React.FC<GamePopupProps> = ({ friend, message, onClose, 
            
            <div className="flex gap-3 h-[56px]">
               <button 
-                onClick={() => setShowTopic(!showTopic)}
-                className={`flex-1 border-[4px] border-black shadow-[4px_4px_0_0_#000] active:translate-y-1 active:shadow-none transition-all flex items-center justify-center gap-2 ${showTopic ? 'bg-white' : 'bg-[#FFD740]'}`}
+                onClick={() => setShowHint(!showHint)}
+                className={`flex-1 border-[4px] border-black shadow-[4px_4px_0_0_#000] active:translate-y-1 active:shadow-none transition-all flex items-center justify-center gap-2 ${showHint ? 'bg-white' : 'bg-[#FFD740]'}`}
               >
-                 <Tag size={20} color="black" strokeWidth={3} />
-                 <span className="text-[12px] font-bold text-black">TOPIC</span>
+                 <Lightbulb size={20} color="black" strokeWidth={3} />
+                 <span className="text-[12px] font-bold text-black">HINT</span>
               </button>
 
               <button 

@@ -27,6 +27,7 @@ export interface Message {
   text?: string;
   emojis?: string[];
   topic?: string;
+  hint?: string; // New field for the clue
   difficulty?: string;
   points?: number;
   time: string;

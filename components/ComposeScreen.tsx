@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Rocket, Loader, RefreshCw, Star, Tag, Trophy } from 'lucide-react';
+import { ArrowLeft, Rocket, Loader, RefreshCw, Star, Tag, Trophy, Lightbulb } from 'lucide-react';
 import { COLORS } from '../constants';
 import { PixelAvatar } from './PixelAvatar';
 import { Friend } from '../types';
@@ -14,6 +14,7 @@ interface ComposeScreenProps {
 interface VibeAnalysis {
   emojis: string[];
   topic: string;
+  hint: string;
   difficulty: 'EASY' | 'MEDIUM' | 'HARD';
   points: number;
 }
@@ -43,9 +44,10 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
           
           Return a JSON object with:
           1. "emojis": Array of 3-6 emojis that represent the message concepts sequentially.
-          2. "topic": A short 1-3 word category (e.g. ACTION, FOOD, TRAVEL, FEELING).
-          3. "difficulty": "EASY", "MEDIUM", or "HARD".
-          4. "points": Integer estimate between 50-200 based on difficulty.
+          2. "hint": A short, indirect clue about the context (e.g. 'About breakfast', 'Weekend plan', 'Feeling'). Max 4-6 words. Do NOT reveal the exact answer. If the text is Thai, the hint must be Thai.
+          3. "topic": A very short 1 word category (e.g. ACTIVITY, FOOD).
+          4. "difficulty": "EASY", "MEDIUM", or "HARD".
+          5. "points": Integer estimate between 50-200 based on difficulty.
           
           Return ONLY valid JSON.
         `;
@@ -60,6 +62,8 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
         const result = JSON.parse(output) as VibeAnalysis;
         
         if (result && result.emojis) {
+            // Fallback if AI forgets hint field
+            if (!result.hint) result.hint = "GUESS THE VIBE!";
             setAnalysis(result);
             setShowPreview(true);
         } else {
@@ -70,6 +74,7 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
         setAnalysis({
             emojis: ["👾", "⚡", "❓"],
             topic: "MYSTERY",
+            hint: "TRY TO GUESS!",
             difficulty: "MEDIUM",
             points: 100
         });
@@ -98,6 +103,7 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
                 text: text,
                 emojis: analysis.emojis,
                 topic: analysis.topic,
+                hint: analysis.hint, // Include the hint
                 difficulty: analysis.difficulty,
                 points: analysis.points,
                 status: 'SENT',
@@ -239,12 +245,23 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
                         </div>
 
                         <div className="grid grid-cols-2 gap-3 mb-4">
+                            {/* HINT BOX (REPLACES TOPIC) */}
+                            <div className="col-span-2 bg-[#444] p-2 border-[2px] border-black rounded flex flex-col items-center">
+                                <div className="flex items-center gap-1 mb-1">
+                                    <Lightbulb size={12} color="#FFD740" />
+                                    <span className="text-[#FFD740] text-[8px] uppercase">GENERATED HINT</span>
+                                </div>
+                                <span className="text-white text-[10px] uppercase font-bold text-center leading-relaxed">
+                                    "{analysis.hint}"
+                                </span>
+                            </div>
+
                             <div className="bg-[#444] p-2 border-[2px] border-black rounded flex flex-col items-center">
                                 <div className="flex items-center gap-1 mb-1">
-                                    <Tag size={10} color="#FFD740" />
-                                    <span className="text-[#aaa] text-[8px] uppercase">TOPIC</span>
+                                    <Tag size={10} color="#aaa" />
+                                    <span className="text-[#aaa] text-[8px] uppercase">CAT</span>
                                 </div>
-                                <span className="text-white text-[10px] uppercase font-bold text-center">{analysis.topic}</span>
+                                <span className="text-white text-[8px] uppercase font-bold text-center">{analysis.topic}</span>
                             </div>
 
                             <div className="bg-[#444] p-2 border-[2px] border-black rounded flex flex-col items-center">

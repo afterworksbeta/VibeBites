@@ -36,6 +36,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
     let content = m.original_text; 
     let emojiList = m.emoji_sequences || [];
     let topic = m.topic;
+    let hint = undefined; // Initialize hint
     let difficulty = m.difficulty;
     let status = m.status || 'SENT';
     
@@ -50,6 +51,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
                 if (parsed.text !== undefined) content = parsed.text;
                 if (emojiList.length === 0 && Array.isArray(parsed.emojis)) emojiList = parsed.emojis;
                 if (parsed.topic) topic = parsed.topic;
+                if (parsed.hint) hint = parsed.hint; // Extract hint
                 if (parsed.difficulty) difficulty = parsed.difficulty;
                 if (parsed.status) status = parsed.status;
                 
@@ -63,7 +65,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
         }
     }
 
-    // Use sent_at as the source of truth for time
+    // STRICT: Use sent_at as the source of truth
     const timeSource = m.sent_at;
 
     return {
@@ -77,6 +79,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
         status: status,
         sender_id: m.sender_id,
         topic: topic || undefined,
+        hint: hint, // Assign hint
         difficulty: difficulty || undefined
     };
   };
@@ -89,17 +92,15 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
         return;
     }
 
-    // console.log(`[ChatScreen] 🔄 Fetching messages...`);
-
     try {
         // Fetch conversation: (Me -> Them) OR (Them -> Me)
         // Use exact formatting for Supabase/PostgREST
         const filter = `and(sender_id.eq.${currentUserId},receiver_id.eq.${friend.id}),and(sender_id.eq.${friend.id},receiver_id.eq.${currentUserId})`;
 
-        // Use sent_at for sorting (Schema Fix)
+        // FIX: Explicitly select known columns. REMOVED 'status' as it doesn't exist.
         const { data, error } = await supabase
             .from('messages')
-            .select('*')
+            .select('id, sender_id, receiver_id, original_text, emoji_sequences, sent_at')
             .or(filter)
             .order('sent_at', { ascending: true });
 
@@ -107,11 +108,6 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
             console.error("[ChatScreen] ❌ Error fetching messages (Detail):", JSON.stringify(error, null, 2));
             throw error;
         } else if (data) {
-            // Log only if data changes or is substantial to keep console clean
-            if (data.length > 0) {
-               // console.log(`[ChatScreen] ✅ Found ${data.length} messages.`);
-            }
-            
             setChatMessages(prev => {
                 const dbMessages = data.map(m => mapToMessage(m, currentUserId));
                 
@@ -119,7 +115,6 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
                 const localPending = prev.filter(m => m.status === 'SENDING');
                 
                 // Merge DB messages with local pending
-                // We use the timestamp ID of local messages to differentiate from DB ID (int/uuid)
                 return [...dbMessages, ...localPending];
             });
         }
@@ -145,7 +140,6 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
         await fetchMessages(currentUserId);
 
         // 2. Realtime Subscription
-        // Listen to ALL inserts on 'messages' table to ensure we don't miss anything due to filter syntax issues
         const channelName = `room_chat_${friend.id}_${Date.now()}`;
         channel = supabase.channel(channelName)
             .on(
@@ -157,7 +151,6 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
                 }, 
                 (payload) => {
                     const newMsg = payload.new;
-                    // console.log("🔔 [ChatScreen] Raw Realtime Event:", newMsg);
 
                     // Client-side filtering: Check if this message belongs to THIS conversation
                     const isRelevant = 
@@ -278,7 +271,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
         console.log("[ChatScreen] Sending to DB...", { receiver: friend.id });
 
         // Insert - ensure we use columns that definitely exist
-        // Use sent_at instead of creating default
+        // FIX: Explicitly select known columns on return. REMOVED 'status'.
         const { data, error } = await supabase
             .from('messages')
             .insert({
@@ -288,7 +281,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
                 emoji_sequences: emojis || [],
                 sent_at: currentIsoTime 
             })
-            .select()
+            .select('id, sender_id, receiver_id, original_text, emoji_sequences, sent_at')
             .single();
         
         if (error) throw error;

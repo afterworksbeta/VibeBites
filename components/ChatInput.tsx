@@ -27,20 +27,37 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend }) => {
     setLoading(true);
     try {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        
+        // Updated prompt to match ComposeScreen's "Vibe Game" logic
+        const prompt = `
+          Analyze this message for a word-guessing game: "${text}"
+          
+          Return a JSON object with:
+          "emojis": Array of 3-6 emojis that represent the message concepts sequentially or capture the "vibe" for a player to guess.
+          
+          Return ONLY valid JSON.
+        `;
+
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: `Convert the following message into a sequence of emojis that represents the text word-for-word or concept-for-concept. Do not limit the number of emojis. Return ONLY the emojis separated by spaces. No other text. Message: "${text}"`,
+            contents: prompt,
+            config: { responseMimeType: 'application/json' }
         });
 
-        const output = response.text || "";
-        const emojis = output.trim().split(/\s+/).filter(e => e.trim().length > 0);
+        const output = response.text || "{}";
+        const result = JSON.parse(output);
+        const emojis = result.emojis || [];
         
-        if (emojis.length > 0) {
+        if (Array.isArray(emojis) && emojis.length > 0) {
             setGeneratedEmojis(emojis);
             setShowPreview(true);
+        } else {
+             // Fallback
+             throw new Error("No emojis returned");
         }
     } catch (e) {
         console.error("Failed to generate emojis", e);
+        // Simple local fallback if AI fails
         setGeneratedEmojis(["👾", "⚡", "❓"]);
         setShowPreview(true);
     } finally {
