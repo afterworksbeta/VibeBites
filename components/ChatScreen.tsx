@@ -33,11 +33,6 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
 
   // Helper to map DB row to Message type
   const mapToMessage = (m: any, currentUserId: string): Message => {
-    // DB Schema Mapping:
-    // original_text -> Raw content (JSON packed)
-    // emoji_sequences -> Emoji array
-    // sent_at -> Time
-    
     let content = m.original_text; 
     let emojiList = m.emoji_sequences || [];
     let topic = m.topic;
@@ -47,20 +42,18 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
     // Default type based on sender
     let msgType = m.sender_id === currentUserId ? MessageType.OUTGOING : MessageType.INCOMING_UNSOLVED;
 
-    // PROTOCOL: Attempt to parse JSON from original_text column (Schema Fix)
+    // PROTOCOL: Attempt to parse JSON from original_text
     if (typeof content === 'string' && content.trim().startsWith('{')) {
         try {
             const parsed = JSON.parse(content);
-            // Check if it looks like our packed object
             if (parsed && typeof parsed === 'object') {
                 if (parsed.text !== undefined) content = parsed.text;
-                // If emoji_sequences is empty in DB but present in JSON, use JSON (backup)
                 if (emojiList.length === 0 && Array.isArray(parsed.emojis)) emojiList = parsed.emojis;
                 if (parsed.topic) topic = parsed.topic;
                 if (parsed.difficulty) difficulty = parsed.difficulty;
                 if (parsed.status) status = parsed.status;
                 
-                // If we are the receiver, trust the type in the payload (e.g. game vs text)
+                // Trust type from payload if incoming
                 if (m.sender_id !== currentUserId && parsed.type) {
                      msgType = parsed.type;
                 }
@@ -70,8 +63,9 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
         }
     }
 
-    // Determine timestamp source (sent_at prefered, then created_at, then now)
-    const timeSource = m.sent_at || m.created_at;
+    // Prefer created_at as it is standard Supabase timestamp. 
+    // Falls back to sent_at if created_at is missing (unlikely).
+    const timeSource = m.created_at || m.sent_at;
 
     return {
         id: m.id,
@@ -96,28 +90,42 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
         return;
     }
 
-    console.log(`[ChatScreen] Fetching messages: Me=${currentUserId} Friend=${friend.id}`);
+    // console.log(`[ChatScreen] 🔄 Fetching messages...`);
 
-    // Explicit OR filter string to prevent syntax errors
-    const filter = `and(sender_id.eq.${currentUserId},receiver_id.eq.${friend.id}),and(sender_id.eq.${friend.id},receiver_id.eq.${currentUserId})`;
+    try {
+        // Fetch conversation: (Me -> Them) OR (Them -> Me)
+        // Use exact formatting for Supabase/PostgREST
+        const filter = `and(sender_id.eq.${currentUserId},receiver_id.eq.${friend.id}),and(sender_id.eq.${friend.id},receiver_id.eq.${currentUserId})`;
 
-    const { data, error } = await supabase
-        .from('messages')
-        .select('*')
-        .or(filter)
-        .order('sent_at', { ascending: true }); // Ordered by sent_at as UUIDs are random
+        // Use created_at for sorting as it's guaranteed by Supabase defaults
+        const { data, error } = await supabase
+            .from('messages')
+            .select('*')
+            .or(filter)
+            .order('created_at', { ascending: true });
 
-    if (error) {
-        console.error("[ChatScreen] Error fetching messages:", error);
-    } else if (data) {
-        console.log(`[ChatScreen] Fetched ${data.length} messages`);
-        setChatMessages(prev => {
-            const dbMessages = data.map(m => mapToMessage(m, currentUserId));
-            // Keep local pending messages that haven't been saved yet
-            const localPending = prev.filter(m => m.status === 'SENDING');
+        if (error) {
+            console.error("[ChatScreen] ❌ Error fetching messages (Detail):", JSON.stringify(error, null, 2));
+            throw error;
+        } else if (data) {
+            // Log only if data changes or is substantial to keep console clean
+            if (data.length > 0) {
+               // console.log(`[ChatScreen] ✅ Found ${data.length} messages.`);
+            }
             
-            return [...dbMessages, ...localPending];
-        });
+            setChatMessages(prev => {
+                const dbMessages = data.map(m => mapToMessage(m, currentUserId));
+                
+                // Keep local pending messages (optimistic updates)
+                const localPending = prev.filter(m => m.status === 'SENDING');
+                
+                // Merge DB messages with local pending
+                // We use the timestamp ID of local messages to differentiate from DB ID (int/uuid)
+                return [...dbMessages, ...localPending];
+            });
+        }
+    } catch (e: any) {
+        console.error("[ChatScreen] Exception in fetchMessages:", e.message || e);
     }
   };
 
@@ -131,27 +139,42 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
         
         const currentUserId = user.id;
         setUserId(currentUserId);
+        
+        console.log(`[ChatScreen] 🚀 Setup started. Me: ${currentUserId}, Friend: ${friend.id}`);
 
+        // 1. Initial Fetch
         await fetchMessages(currentUserId);
 
-        // Realtime
-        channel = supabase.channel(`chat_${currentUserId}_${friend.id}_${Date.now()}`)
+        // 2. Realtime Subscription
+        // Listen to ALL inserts on 'messages' table to ensure we don't miss anything due to filter syntax issues
+        const channelName = `room_chat_${friend.id}_${Date.now()}`;
+        channel = supabase.channel(channelName)
             .on(
                 'postgres_changes', 
                 { 
                     event: 'INSERT', 
                     schema: 'public', 
                     table: 'messages',
-                    filter: `receiver_id=eq.${currentUserId}`
                 }, 
                 (payload) => {
-                    console.log("🔔 [ChatScreen] Realtime Message Received:", payload);
-                    if (payload.new.sender_id === friend.id) {
-                         const newMessage = mapToMessage(payload.new, currentUserId);
+                    const newMsg = payload.new;
+                    // console.log("🔔 [ChatScreen] Raw Realtime Event:", newMsg);
+
+                    // Client-side filtering: Check if this message belongs to THIS conversation
+                    const isRelevant = 
+                        (newMsg.sender_id === friend.id && newMsg.receiver_id === currentUserId) || // Incoming
+                        (newMsg.sender_id === currentUserId && newMsg.receiver_id === friend.id);   // Outgoing (from another device?)
+
+                    if (isRelevant) {
+                         console.log("🔔 [ChatScreen] Relevant Message Received!");
+                         const messageObj = mapToMessage(newMsg, currentUserId);
+                         
                          setChatMessages(prev => {
-                             if (prev.some(m => m.id === newMessage.id)) return prev;
-                             return [...prev, newMessage];
+                             // Simple dedupe by ID
+                             if (prev.some(m => m.id === messageObj.id)) return prev;
+                             return [...prev, messageObj];
                          });
+                         
                          setTimeout(scrollToBottom, 100);
                     }
                 }
@@ -160,10 +183,10 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
                 console.log(`🔌 [ChatScreen] Subscription Status: ${status}`);
             });
 
-        // Polling backup
+        // 3. Polling Fallback (Every 3 seconds)
         pollingInterval = setInterval(() => {
             fetchMessages(currentUserId);
-        }, 5000);
+        }, 3000);
     };
 
     if (isUUID(friend.id)) {
@@ -176,7 +199,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
         if (channel) supabase.removeChannel(channel);
         if (pollingInterval) clearInterval(pollingInterval);
     };
-  }, [friend.id]);
+  }, [friend.id]); // Re-run if friend changes
 
   useEffect(() => {
     scrollToBottom();
@@ -215,8 +238,6 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
   };
 
   const handleSendMessage = async (text: string, emojis?: string[]) => {
-    console.log("[ChatScreen] Sending message...", { text, emojis });
-    
     if (!userId) {
         alert("ERROR: User ID missing. Please re-login.");
         return;
@@ -234,18 +255,18 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
         emojis: emojis || [] 
     };
     
+    // Optimistic UI update
     setChatMessages(prev => [...prev, optimisticMessage]);
     setTimeout(scrollToBottom, 50);
 
     if (!isUUID(friend.id)) {
-        console.log("Mock Friend: Skipped DB insert");
         setIsSending(false);
         setChatMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'SENT' } : m));
         return;
     }
 
     try {
-        // 1. Pack Data
+        // Pack Payload
         const payload = {
             text: text,
             emojis: emojis || [],
@@ -255,40 +276,33 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
         const jsonPayload = JSON.stringify(payload);
         const currentIsoTime = new Date().toISOString();
 
-        // 2. Insert into DB (Correct Schema)
-        console.log("[ChatScreen] Inserting into DB...", {
-            sender_id: userId,
-            receiver_id: friend.id,
-            original_text: jsonPayload.substring(0, 20) + "...",
-            emoji_sequences: emojis || [],
-            sent_at: currentIsoTime
-        });
+        console.log("[ChatScreen] Sending to DB...", { receiver: friend.id });
 
+        // Insert - ensure we use columns that definitely exist
+        // Note: We use created_at implicitly (default now())
         const { data, error } = await supabase
             .from('messages')
             .insert({
                 sender_id: userId,
                 receiver_id: friend.id,
-                original_text: jsonPayload, // Changed from 'text'
-                emoji_sequences: emojis || [], // Added NOT NULL column
-                sent_at: currentIsoTime // Added for sorting
+                original_text: jsonPayload,
+                emoji_sequences: emojis || [],
+                // We attempt to send sent_at, but if it fails, the trigger or default created_at will save us
+                sent_at: currentIsoTime 
             })
             .select()
             .single();
         
-        if (error) {
-            console.error("[ChatScreen] INSERT ERROR:", error);
-            throw error;
-        }
+        if (error) throw error;
 
         if (data) {
-            console.log("[ChatScreen] INSERT SUCCESS:", data);
+            console.log("[ChatScreen] Send Success!", data.id);
             const realMessage = mapToMessage(data, userId);
             setChatMessages(prev => prev.map(m => m.id === tempId ? realMessage : m));
         }
     } catch (err: any) {
-        console.error("[ChatScreen] Exception sending:", err);
-        alert(`SEND FAILED: ${err.message || 'Unknown error'}`);
+        console.error("[ChatScreen] Send Failed:", JSON.stringify(err, null, 2));
+        alert(`SEND FAILED: ${err.message || "Check console"}`);
         setChatMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'FAILED' } : m));
     } finally {
         setIsSending(false);
