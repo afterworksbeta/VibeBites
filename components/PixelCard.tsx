@@ -23,13 +23,21 @@ export const PixelCard: React.FC<PixelCardProps> = ({ friend, onClick, onDelete 
       <div className="absolute inset-0 rounded-[8px] border-2 border-white/30 pointer-events-none"></div>
 
       {/* Left: Avatar */}
-      <div className="mr-4 z-10">
+      <div className="mr-4 z-10 relative">
         <PixelAvatar 
             seed={friend.avatarSeed} 
             size={64} 
             borderWidth={3} 
             backgroundColor={friend.color} 
         />
+        {/* Unread Notification Badge */}
+        {friend.unreadCount && friend.unreadCount > 0 ? (
+            <div className="absolute -top-2 -right-2 bg-[#FF5252] border-[3px] border-black w-7 h-7 flex items-center justify-center shadow-[2px_2px_0_0_rgba(0,0,0,0.5)] z-20 animate-bounce">
+                <span className="text-white text-[10px] font-bold leading-none mt-[1px]">
+                    {friend.unreadCount > 9 ? '9+' : friend.unreadCount}
+                </span>
+            </div>
+        ) : null}
       </div>
 
       {/* Center: Info */}

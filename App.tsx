@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PixelHeader } from './components/PixelHeader';
 import { PixelCard } from './components/PixelCard';
 import { FloatingActionButton } from './components/FloatingActionButton';
@@ -41,11 +41,24 @@ const App: React.FC = () => {
   const [currentUserBgColor, setCurrentUserBgColor] = useState('#b6e3f4');
   const [currentUsername, setCurrentUsername] = useState(''); 
 
+  // Refs for realtime updates
+  const selectedFriendRef = useRef<Friend | null>(null);
+  const currentScreenRef = useRef<string>('auth');
+
   // Scanner state
   const [startScanning, setStartScanning] = useState(false);
 
   // Game Result State
   const [lastGameResult, setLastGameResult] = useState<{message: Message, score: number, guess: string} | null>(null);
+
+  // Sync refs with state
+  useEffect(() => {
+    selectedFriendRef.current = selectedFriend;
+  }, [selectedFriend]);
+
+  useEffect(() => {
+    currentScreenRef.current = currentScreen;
+  }, [currentScreen]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -82,6 +95,44 @@ const App: React.FC = () => {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // Realtime subscription for unread counts
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    const userId = session.user.id;
+
+    const channel = supabase.channel('home_unread_counts')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `receiver_id=eq.${userId}`
+        },
+        (payload) => {
+          const newMsg = payload.new;
+          
+          setFriends(prev => prev.map(f => {
+              // If message is from a friend
+              if (f.id === newMsg.sender_id) {
+                  // If we are currently chatting with this person, don't increment badge
+                  // (Optionally we could increment and let the user see it when they back out, 
+                  // but typically active chat implies read. For simplicity in this structure,
+                  // we will increment so the user sees "1" if they leave, unless ChatScreen marks read.)
+                  // Let's increment for now, handleFriendClick clears it.
+                  return { ...f, unreadCount: (f.unreadCount || 0) + 1 };
+              }
+              return f;
+          }));
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session]);
 
   const fetchProfileWithRetry = async (userId: string, retries = 3) => {
       let attempt = 0;
@@ -139,6 +190,7 @@ const App: React.FC = () => {
   const fetchFriends = async (userId: string) => {
     setLoading(true);
     try {
+      // 1. Get connections
       const { data: connections, error: connError } = await supabase
         .from('friendships')
         .select('user_id, friend_id, status')
@@ -154,6 +206,7 @@ const App: React.FC = () => {
         return;
       }
 
+      // 2. Get friend IDs
       const friendIds = connections.map((c: any) => 
         c.user_id === userId ? c.friend_id : c.user_id
       );
@@ -165,6 +218,7 @@ const App: React.FC = () => {
         return;
       }
 
+      // 3. Get profiles
       const { data: profiles, error: profError } = await supabase
         .from('profiles')
         .select('*') 
@@ -172,6 +226,20 @@ const App: React.FC = () => {
 
       if (profError) {
         return;
+      }
+
+      // 4. Get unread message counts
+      const { data: unreadMessages } = await supabase
+         .from('messages')
+         .select('sender_id')
+         .eq('receiver_id', userId)
+         .neq('status', 'READ');
+      
+      const unreadCounts: Record<string, number> = {};
+      if (unreadMessages) {
+          unreadMessages.forEach((m: any) => {
+              unreadCounts[m.sender_id] = (unreadCounts[m.sender_id] || 0) + 1;
+          });
       }
 
       if (profiles) {
@@ -182,8 +250,13 @@ const App: React.FC = () => {
           statusIcon: '✓',
           time: '1H',
           color: p.color || COLORS.BLUE, // Use 'color' column
-          avatarSeed: p.avatar_id || 'default' // Use 'avatar_id' column
+          avatarSeed: p.avatar_id || 'default', // Use 'avatar_id' column
+          unreadCount: unreadCounts[p.id] || 0
         }));
+
+        // Sort: Friends with unread messages first
+        formattedFriends.sort((a, b) => (b.unreadCount || 0) - (a.unreadCount || 0));
+
         setFriends(formattedFriends);
       }
     } catch (err) {
@@ -217,9 +290,22 @@ const App: React.FC = () => {
       }
   };
 
-  const handleFriendClick = (friend: Friend) => {
+  const handleFriendClick = async (friend: Friend) => {
+    // Optimistic UI update: Clear badge immediately
+    setFriends(prev => prev.map(f => f.id === friend.id ? { ...f, unreadCount: 0 } : f));
+    
     setSelectedFriend(friend);
     setCurrentScreen('chat');
+
+    // Update DB: Mark messages as READ
+    if (session && isUUID(friend.id)) {
+        await supabase
+            .from('messages')
+            .update({ status: 'READ' })
+            .eq('sender_id', friend.id)
+            .eq('receiver_id', session.user.id)
+            .neq('status', 'READ');
+    }
   };
 
   const handleDeleteConversation = async (e: React.MouseEvent, friendId: string | number) => {
@@ -270,6 +356,10 @@ const App: React.FC = () => {
   const handleBack = () => {
     setCurrentScreen('home');
     setSelectedFriend(null);
+    // Refresh friends to ensure unread counts are synced (e.g. if messages arrived while in chat)
+    if (session) {
+        fetchFriends(session.user.id);
+    }
   };
 
   const handleProfileClick = () => setCurrentScreen('profile');
@@ -333,6 +423,26 @@ const App: React.FC = () => {
             color: newBgColor
         }).eq('id', session.user.id);
     }
+  };
+
+  const handleUpdateUsername = async (newName: string) => {
+      const trimmed = newName.trim();
+      if (!trimmed) return;
+      
+      setCurrentUsername(trimmed);
+
+      if (session) {
+         const { error } = await supabase
+          .from('profiles')
+          .update({ username: trimmed })
+          .eq('id', session.user.id);
+         
+         if (error) {
+             console.error("Error updating username", error);
+             alert("Could not update username. Please try again.");
+             fetchProfileWithRetry(session.user.id); // Revert
+         }
+      }
   };
 
   return (
@@ -433,6 +543,7 @@ const App: React.FC = () => {
                 onSettingsClick={handleSettingsClick} 
                 onInviteClick={handleInviteClick}
                 onEditProfile={handleEditProfile}
+                onUpdateUsername={handleUpdateUsername}
                 currentSeed={currentUserSeed}
                 currentBgColor={currentUserBgColor}
                 username={currentUsername}

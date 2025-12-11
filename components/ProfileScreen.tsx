@@ -1,14 +1,16 @@
-import React from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { COLORS } from '../constants';
 import { PixelAvatar } from './PixelAvatar';
 import { PixelSprite } from './PixelSprite';
-import { ArrowLeft, Settings, ArrowRight, Lock, Camera, Loader } from 'lucide-react';
+import { ArrowLeft, Settings, ArrowRight, Lock, Camera, Loader, Edit2, Check, X } from 'lucide-react';
 
 interface ProfileScreenProps {
   onBack: () => void;
   onSettingsClick: () => void;
   onInviteClick: () => void;
   onEditProfile?: () => void;
+  onUpdateUsername?: (name: string) => void;
   currentSeed?: string;
   currentBgColor?: string;
   username?: string;
@@ -19,15 +21,35 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onSettingsClick, 
   onInviteClick, 
   onEditProfile,
+  onUpdateUsername,
   currentSeed = "currentUser_player1",
   currentBgColor,
   username = ""
 }) => {
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [tempName, setTempName] = useState(username);
+
+  // Sync state if prop changes
+  useEffect(() => {
+    setTempName(username);
+  }, [username]);
 
   const handleAvatarClick = () => {
     if (onEditProfile) {
         onEditProfile();
     }
+  };
+
+  const handleSaveName = () => {
+      if (onUpdateUsername && tempName.trim().length > 0) {
+          onUpdateUsername(tempName.trim());
+      }
+      setIsEditingName(false);
+  };
+
+  const handleCancelName = () => {
+      setTempName(username);
+      setIsEditingName(false);
   };
 
   const displayUsername = username || "...";
@@ -87,12 +109,46 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             </button>
         </div>
 
-        {/* Username */}
-        <div className="relative bg-[#FFD740] border-[4px] border-black px-4 py-2 shadow-[4px_4px_0_0_#000000] mb-3">
-             <div className="absolute inset-[2px] border-[2px] border-white pointer-events-none"></div>
-             <h1 className="text-[18px] text-black uppercase relative z-10">
-                {displayUsername}
-             </h1>
+        {/* Username (Editable) */}
+        <div className="relative mb-3 group">
+             {isEditingName ? (
+                 <div className="bg-white border-[4px] border-black p-2 shadow-[4px_4px_0_0_#000000] flex items-center gap-2 max-w-[280px]">
+                     <input 
+                        className="flex-1 bg-transparent outline-none font-['Press_Start_2P'] text-[14px] uppercase text-black min-w-0"
+                        value={tempName}
+                        onChange={(e) => setTempName(e.target.value.toUpperCase())}
+                        autoFocus
+                        onKeyDown={(e) => e.key === 'Enter' && handleSaveName()}
+                        maxLength={12}
+                        placeholder="NAME?"
+                     />
+                     <button 
+                        onClick={handleSaveName} 
+                        className="bg-[#00E676] p-1 border-2 border-black hover:scale-110 transition-transform active:translate-y-1"
+                     >
+                         <Check size={16} color="black" strokeWidth={3} />
+                     </button>
+                     <button 
+                        onClick={handleCancelName} 
+                        className="bg-[#FF5252] p-1 border-2 border-black hover:scale-110 transition-transform active:translate-y-1"
+                     >
+                         <X size={16} color="black" strokeWidth={3} />
+                     </button>
+                 </div>
+             ) : (
+                <div 
+                    onClick={() => setIsEditingName(true)}
+                    className="relative bg-[#FFD740] border-[4px] border-black px-4 py-2 shadow-[4px_4px_0_0_#000000] cursor-pointer hover:translate-y-[-2px] hover:shadow-[6px_6px_0_0_#000000] transition-all flex items-center gap-2 pr-8"
+                >
+                    <div className="absolute inset-[2px] border-[2px] border-white pointer-events-none"></div>
+                    <h1 className="text-[18px] text-black uppercase relative z-10 select-none">
+                        {displayUsername}
+                    </h1>
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 opacity-30 group-hover:opacity-100 transition-opacity">
+                        <Edit2 size={14} color="black" strokeWidth={3} />
+                    </div>
+                </div>
+             )}
         </div>
 
         {/* Level Tag */}
