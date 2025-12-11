@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { COLORS } from '../constants';
 import { PixelSprite } from './PixelSprite';
@@ -143,8 +144,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
             const fullProfile = {
                 id: authData.user.id,
                 username: finalUsername,
-                avatar_seed: `player_${Math.floor(Math.random() * 10000)}`,
-                bg_color: '#b6e3f4'
+                avatar_id: `player_${Math.floor(Math.random() * 10000)}`, // Changed from avatar_seed
+                color: '#b6e3f4' // Changed from bg_color
             };
 
             const { error: profileError } = await supabase.from('profiles').upsert(fullProfile);

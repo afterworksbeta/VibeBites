@@ -1,3 +1,4 @@
+
 export enum CardStatus {
   NEW_VIBE = 'NEW VIBE!',
   SOLVED = 'SOLVED'
@@ -38,6 +39,6 @@ export interface Message {
 export interface UserProfile {
   id: string;
   username: string;
-  avatar_seed: string;
-  bg_color: string;
+  avatar_id: string; // Updated from avatar_seed
+  color: string;     // Updated from bg_color
 }

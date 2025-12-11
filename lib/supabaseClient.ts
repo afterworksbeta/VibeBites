@@ -1,4 +1,5 @@
 
+
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = 'https://gpfnmupklynwofczxffx.supabase.co';
@@ -14,8 +15,8 @@ export const supabase = createClient(supabaseUrl, supabaseKey);
   create table public.profiles (
     id uuid references auth.users not null primary key,
     username text,
-    avatar_seed text default 'default_seed',
-    bg_color text default '#b6e3f4',
+    avatar_id text default 'cool_kid_01', -- Changed from avatar_seed
+    color text default '#b6e3f4',        -- Changed from bg_color
     updated_at timestamp with time zone default timezone('utc'::text, now())
   );
   -- Enable RLS
@@ -55,8 +56,13 @@ export const supabase = createClient(supabaseUrl, supabaseKey);
   create or replace function public.handle_new_user() 
   returns trigger as $$
   begin
-    insert into public.profiles (id, username, avatar_seed)
-    values (new.id, new.raw_user_meta_data->>'username', 'player_' || floor(random() * 1000)::text);
+    insert into public.profiles (id, username, avatar_id, color)
+    values (
+        new.id, 
+        new.raw_user_meta_data->>'username', 
+        'player_' || floor(random() * 1000)::text,
+        '#b6e3f4'
+    );
     return new;
   end;
   $$ language plpgsql security definer;

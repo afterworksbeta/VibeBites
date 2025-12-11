@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { PixelHeader } from './components/PixelHeader';
 import { PixelCard } from './components/PixelCard';
@@ -102,8 +103,9 @@ const App: React.FC = () => {
         
         if (data && data.username) {
             setCurrentUsername(data.username);
-            if (data.avatar_seed) setCurrentUserSeed(data.avatar_seed);
-            if (data.bg_color) setCurrentUserBgColor(data.bg_color);
+            // Map DB columns to State (avatar_id -> seed, color -> bgColor)
+            if (data.avatar_id) setCurrentUserSeed(data.avatar_id);
+            if (data.color) setCurrentUserBgColor(data.color);
             return true;
         } else {
             console.warn("Profile missing or incomplete. Attempting self-healing...");
@@ -115,8 +117,8 @@ const App: React.FC = () => {
                 const fullProfile = {
                     id: userId,
                     username: recoveryUsername,
-                    avatar_seed: `restored_${Math.floor(Math.random() * 1000)}`,
-                    bg_color: '#b6e3f4'
+                    avatar_id: `restored_${Math.floor(Math.random() * 1000)}`,
+                    color: '#b6e3f4'
                 };
 
                 const { error: insertError } = await supabase.from('profiles').upsert(fullProfile);
@@ -179,8 +181,8 @@ const App: React.FC = () => {
           status: CardStatus.SOLVED, 
           statusIcon: '✓',
           time: '1H',
-          color: p.bg_color || COLORS.BLUE,
-          avatarSeed: p.avatar_seed || 'default'
+          color: p.color || COLORS.BLUE, // Use 'color' column
+          avatarSeed: p.avatar_id || 'default' // Use 'avatar_id' column
         }));
         setFriends(formattedFriends);
       }
@@ -325,9 +327,10 @@ const App: React.FC = () => {
     setCurrentUserBgColor(newBgColor);
     setCurrentScreen('profile');
     if (session) {
+        // Save using correct column names
         await supabase.from('profiles').update({ 
-            avatar_seed: newSeed,
-            bg_color: newBgColor
+            avatar_id: newSeed,
+            color: newBgColor
         }).eq('id', session.user.id);
     }
   };
