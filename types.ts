@@ -12,6 +12,7 @@ export interface Friend {
   time: string;
   color: string;
   avatarSeed: string;
+  unreadCount?: number; // New field for notification badge
 }
 
 export enum MessageType {

@@ -139,6 +139,7 @@ const App: React.FC = () => {
   const fetchFriends = async (userId: string) => {
     setLoading(true);
     try {
+      // 1. Fetch Friendships
       const { data: connections, error: connError } = await supabase
         .from('friendships')
         .select('user_id, friend_id, status')
@@ -165,25 +166,53 @@ const App: React.FC = () => {
         return;
       }
 
+      // 2. Fetch Profiles
       const { data: profiles, error: profError } = await supabase
         .from('profiles')
         .select('*') 
         .in('id', uniqueFriendIds);
 
-      if (profError) {
-        return;
+      if (profError) return;
+
+      // 3. Fetch Unread Counts
+      // We look for messages where receiver is current user and status is NOT 'READ'
+      const { data: unreadMessages } = await supabase
+        .from('messages')
+        .select('sender_id')
+        .eq('receiver_id', userId)
+        .neq('status', 'READ');
+      
+      const unreadMap: Record<string, number> = {};
+      if (unreadMessages) {
+          unreadMessages.forEach((msg: any) => {
+              const sid = String(msg.sender_id);
+              unreadMap[sid] = (unreadMap[sid] || 0) + 1;
+          });
       }
 
       if (profiles) {
-        const formattedFriends: Friend[] = profiles.map((p: any) => ({
-          id: p.id,
-          name: p.username || 'UNKNOWN',
-          status: CardStatus.SOLVED, 
-          statusIcon: '✓',
-          time: '1H',
-          color: p.color || COLORS.BLUE, // Use 'color' column
-          avatarSeed: p.avatar_id || 'default' // Use 'avatar_id' column
-        }));
+        const palette = [COLORS.RED, COLORS.YELLOW, COLORS.PURPLE, COLORS.BLUE, COLORS.PINK, COLORS.GREEN];
+        
+        const formattedFriends: Friend[] = profiles.map((p: any) => {
+            // Deterministic Color Assignment based on ID
+            let hash = 0;
+            const idStr = String(p.id);
+            for (let i = 0; i < idStr.length; i++) {
+                hash = idStr.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            const colorIndex = Math.abs(hash) % palette.length;
+
+            return {
+                id: p.id,
+                name: p.username || 'UNKNOWN',
+                status: CardStatus.SOLVED, 
+                statusIcon: '✓',
+                time: '1H',
+                color: palette[colorIndex], 
+                avatarSeed: p.avatar_id || 'default',
+                unreadCount: unreadMap[String(p.id)] || 0 // Assign unread count
+            };
+        });
         setFriends(formattedFriends);
       }
     } catch (err) {
@@ -217,23 +246,54 @@ const App: React.FC = () => {
       }
   };
 
-  const handleFriendClick = (friend: Friend) => {
+  const handleFriendClick = async (friend: Friend) => {
     setSelectedFriend(friend);
     setCurrentScreen('chat');
+
+    // 1. Locally clear the unread count immediately for UI responsiveness
+    setFriends(prev => prev.map(f => 
+        f.id === friend.id ? { ...f, unreadCount: 0 } : f
+    ));
+
+    // 2. Mark messages as READ in database
+    if (session && isUUID(friend.id)) {
+        try {
+            await supabase
+                .from('messages')
+                .update({ status: 'READ' })
+                .eq('receiver_id', session.user.id)
+                .eq('sender_id', friend.id)
+                .neq('status', 'READ'); // Only update if not already read
+        } catch (e) {
+            console.error("Failed to mark messages as read", e);
+        }
+    }
   };
 
-  const handleDeleteConversation = async (e: React.MouseEvent, friendId: string | number) => {
-      e.stopPropagation();
-      const confirmDelete = window.confirm("REMOVE FRIEND & DELETE CHAT?");
+  const handleDeleteConversation = async (friendId: string | number) => {
+      const confirmDelete = window.confirm("CLEAR CHAT HISTORY? Messages will be gone, but friend will remain.");
       if (!confirmDelete) return;
 
-      setFriends(prev => prev.filter(f => f.id !== friendId));
-      
+      // 1. Immediate Visual Feedback
+      setFriends(currentFriends => {
+          return currentFriends.map(f => {
+              if (String(f.id) === String(friendId)) {
+                  return { ...f, status: CardStatus.NEW_VIBE, statusIcon: '✨', time: 'CLEARED' };
+              }
+              return f;
+          });
+      });
+
+      // 2. Database Operation
       if (session && isUUID(friendId)) {
-            await supabase
-                .from('friendships')
+            const { error } = await supabase
+                .from('messages')
                 .delete()
-                .or(`and(user_id.eq.${session.user.id},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${session.user.id})`);
+                .or(`and(sender_id.eq.${session.user.id},receiver_id.eq.${friendId}),and(sender_id.eq.${friendId},receiver_id.eq.${session.user.id})`);
+            
+            if (error) {
+                console.error("Failed to clear messages:", error);
+            }
       }
   };
 
@@ -270,12 +330,14 @@ const App: React.FC = () => {
   const handleBack = () => {
     setCurrentScreen('home');
     setSelectedFriend(null);
+    // Refresh friends to get updated unread counts if any arrived while away
+    if (session) {
+        fetchFriends(session.user.id);
+    }
   };
   
-  // NEW: Handle successful send from Compose Screen
   const handleComposeSuccess = () => {
       setCurrentScreen('chat');
-      // selectedFriend is already set, so it will display the chat
   };
 
   const handleProfileClick = () => setCurrentScreen('profile');
@@ -333,7 +395,6 @@ const App: React.FC = () => {
     setCurrentUserBgColor(newBgColor);
     setCurrentScreen('profile');
     if (session) {
-        // Save using correct column names
         await supabase.from('profiles').update({ 
             avatar_id: newSeed,
             color: newBgColor
@@ -393,7 +454,7 @@ const App: React.FC = () => {
                         key={friend.id} 
                         friend={friend} 
                         onClick={() => handleFriendClick(friend)}
-                        onDelete={(e) => handleDeleteConversation(e, friend.id)}
+                        onDelete={() => handleDeleteConversation(friend.id)}
                         />
                     ))}
                     <div className="flex justify-center mt-8 opacity-50">
@@ -464,6 +525,7 @@ const App: React.FC = () => {
                 currentSeed={currentUserSeed}
                 currentBgColor={currentUserBgColor}
                 username={currentUsername}
+                userId={session?.user?.id}
             />
         )}
         

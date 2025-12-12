@@ -1,5 +1,4 @@
 
-
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = 'https://gpfnmupklynwofczxffx.supabase.co';
@@ -36,6 +35,9 @@ export const supabase = createClient(supabaseUrl, supabaseKey);
   alter table public.friendships enable row level security;
   create policy "Users can see their friends" on public.friendships for select using (auth.uid() = user_id OR auth.uid() = friend_id);
   create policy "Users can add friends" on public.friendships for insert with check (auth.uid() = user_id);
+  
+  -- [FIXED] ADD THIS POLICY TO ENABLE DELETING FRIENDS:
+  create policy "Users can delete their friends" on public.friendships for delete using (auth.uid() = user_id OR auth.uid() = friend_id);
 
   -- 3. Messages Table
   create table public.messages (
@@ -51,6 +53,7 @@ export const supabase = createClient(supabaseUrl, supabaseKey);
   alter table public.messages enable row level security;
   create policy "Users can see their messages" on public.messages for select using (auth.uid() = sender_id OR auth.uid() = receiver_id);
   create policy "Users can send messages" on public.messages for insert with check (auth.uid() = sender_id);
+  create policy "Users can delete their messages" on public.messages for delete using (auth.uid() = sender_id OR auth.uid() = receiver_id);
 
   -- 4. Trigger to create profile on signup
   create or replace function public.handle_new_user() 
