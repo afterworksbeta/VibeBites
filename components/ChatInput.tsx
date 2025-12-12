@@ -32,13 +32,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend }) => {
         // STRICT PROMPT: NO PHONETICS
         const prompt = `Convert text to emojis (1-3 emojis representing the meaning):
 Text: "${text}"
-Return JSON array only.
-Examples:
-- "Hi" -> ["👋"]
-- "Hello" -> ["👋","😊"]
-- "Love" -> ["❤️"]
-- "Thank you" -> ["🙏","😊"]`;
-        `;
+Rules:
+1. USE DIRECT MEANING FIRST (Hi -> 👋, Love -> ❤️)
+2. NO PHONETIC MATCHING (Hi != High/Up, Eye != I)
+3. Return JSON array only.
+
+Return JSON:
+{ "emojis": ["👋"] }`;
 
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',

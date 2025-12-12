@@ -44,13 +44,14 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
         // STRICT PROMPT: NO PHONETICS
         const prompt = `Analyze this message for an emoji guessing game:
 
-Message: "${inputText}"
+Message: "${text}"
 
 Return JSON with:
 {
   "emojis": ["emoji1", "emoji2", "emoji3"],
   "hint": "brief hint about the topic",
-  "difficulty": "easy|medium|hard"
+  "difficulty": "easy|medium|hard",
+  "topic": "category"
 }
 
 Rules:
@@ -58,7 +59,8 @@ Rules:
 2. Emojis should be guessable but fun
 3. Hint should NOT reveal the answer directly
 4. For greetings use gesture emojis (👋, 🙋, etc.)
-5. For objects use the object emoji directly`;
+5. For objects use the object emoji directly
+6. NO PHONETIC MATCHING (e.g. don't use Eye for I)`;
 
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
