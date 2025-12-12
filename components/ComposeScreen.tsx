@@ -39,7 +39,7 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
     
     setLoading(true);
     try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
         
         // STRICT PROMPT: NO PHONETICS
         const prompt = `
