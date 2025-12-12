@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Friend, Message, MessageType } from '../types';
 import { ChatHeader } from './ChatHeader';
@@ -131,7 +132,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
 
         await fetchMessages(currentUserId);
 
-        const channelName = `room_chat_${friend.id}_${Date.now()}`;
+        const channelName = `room_chat_global`; // Simplified channel for stability
         channel = supabase.channel(channelName)
             .on(
                 'postgres_changes', 
@@ -153,7 +154,8 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
                              if (prev.some(m => m.id === messageObj.id)) return prev;
                              return [...prev, messageObj];
                          });
-                         setTimeout(scrollToBottom, 100);
+                         // Wait slightly for render then scroll
+                         setTimeout(() => scrollToBottom(), 150);
                     }
                 }
             )
@@ -163,7 +165,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
 
         pollingInterval = setInterval(() => {
             fetchMessages(currentUserId);
-        }, 3000);
+        }, 5000);
     };
 
     if (isUUID(friend.id)) {
@@ -178,12 +180,15 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
     };
   }, [friend.id]); 
 
+  // Force scroll on messages update
   useEffect(() => {
     scrollToBottom();
-  }, [chatMessages.length]);
+  }, [chatMessages.length, isSending]);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messagesEndRef.current) {
+        messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
   };
 
   const handleMessageClick = (msg: Message) => {
@@ -237,11 +242,15 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
     };
     
     setChatMessages(prev => [...prev, optimisticMessage]);
-    setTimeout(scrollToBottom, 50);
+    
+    // Immediate scroll after state set
+    requestAnimationFrame(() => scrollToBottom());
 
     if (!isUUID(friend.id)) {
-        setIsSending(false);
-        setChatMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'SENT' } : m));
+        setTimeout(() => {
+            setIsSending(false);
+            setChatMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'SENT' } : m));
+        }, 500);
         return;
     }
 
@@ -278,7 +287,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
         }
     } catch (err: any) {
         console.error("[ChatScreen] Send Failed:", JSON.stringify(err, null, 2));
-        alert(`SEND FAILED: ${err.message || "Check console"}`);
+        // Keep it local but mark failed
         setChatMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'FAILED' } : m));
     } finally {
         setIsSending(false);
@@ -317,7 +326,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
                     </span>
                 </div>
             )}
-            <div ref={messagesEndRef} />
+            <div ref={messagesEndRef} className="h-4" />
         </div>
       </main>
 

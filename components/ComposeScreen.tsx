@@ -34,17 +34,14 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
     return '#00E676'; // Green
   };
 
-  const handlePreview = async () => {
-    if (text.trim().length === 0) return;
-    
-    setLoading(true);
+  // Separated generation logic for re-use
+  const generateAnalysis = async (inputText: string): Promise<VibeAnalysis | null> => {
     try {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         
-        // STRICT PROMPT: NO PHONETICS
         const prompt = `Analyze this message for an emoji guessing game:
 
-Message: "${text}"
+Message: "${inputText}"
 
 Return JSON with:
 {
@@ -82,40 +79,40 @@ Rules:
 
         let output = response.text || "{}";
         output = output.replace(/```json/g, '').replace(/```/g, '').trim();
-
-        console.log("[ComposeScreen] AI Raw Output:", output);
-
         const result = JSON.parse(output) as any;
         
         if (result && result.emojis) {
-            const normalized: VibeAnalysis = {
+            return {
                 emojis: result.emojis,
                 hint: result.hint || "GUESS THE VIBE!",
                 topic: result.topic || "MYSTERY",
                 difficulty: (result.difficulty?.toUpperCase() === 'HARD' || result.difficulty?.toUpperCase() === 'EASY') ? result.difficulty.toUpperCase() : 'MEDIUM',
                 points: result.points || 100
             };
-            
-            setAnalysis(normalized);
-            setShowPreview(true);
-        } else {
-            throw new Error("Invalid format");
         }
+        return null;
     } catch (e) {
-        console.error("Failed to generate vibe analysis", e);
-        
+        console.error("Analysis Failed:", e);
         // Fallback
-        setAnalysis({
+        return {
             emojis: ["❓", "👋", "✨"],
             topic: "MYSTERY",
             hint: "TRY TO GUESS!",
             difficulty: "MEDIUM",
             points: 100
-        });
-        setShowPreview(true);
-    } finally {
-        setLoading(false);
+        };
     }
+  };
+
+  const handlePreview = async () => {
+    if (text.trim().length === 0) return;
+    setLoading(true);
+    const result = await generateAnalysis(text);
+    if (result) {
+        setAnalysis(result);
+        setShowPreview(true);
+    }
+    setLoading(false);
   };
 
   const handleRegenerate = () => {
@@ -123,21 +120,36 @@ Rules:
   };
 
   const handleSend = async () => {
-    if (!text || !analysis) return;
+    if (!text) return;
     
     setSending(true);
 
     try {
+        let currentAnalysis = analysis;
+
+        // AUTO-ANALYZE if user skipped the preview step
+        if (!currentAnalysis) {
+             const result = await generateAnalysis(text);
+             if (result) {
+                 setAnalysis(result);
+                 currentAnalysis = result;
+                 // Briefly show preview state so user knows what happened
+                 setShowPreview(true);
+             } else {
+                 throw new Error("Could not generate vibe");
+             }
+        }
+
         const { data: { user } } = await supabase.auth.getUser();
         
-        if (user) {
+        if (user && currentAnalysis) {
             const packedPayload = JSON.stringify({
                 text: text,
-                emojis: analysis.emojis,
-                topic: analysis.topic,
-                hint: analysis.hint,
-                difficulty: analysis.difficulty,
-                points: analysis.points,
+                emojis: currentAnalysis.emojis,
+                topic: currentAnalysis.topic,
+                hint: currentAnalysis.hint,
+                difficulty: currentAnalysis.difficulty,
+                points: currentAnalysis.points,
                 status: 'SENT',
                 type: 'INCOMING_UNSOLVED'
             });
@@ -147,9 +159,9 @@ Rules:
                 sender_id: user.id,
                 receiver_id: friend.id,
                 original_text: packedPayload,
-                emoji_sequences: analysis.emojis,
+                emoji_sequences: currentAnalysis.emojis,
                 sent_at: currentIsoTime,
-                difficulty_level: analysis.difficulty.toLowerCase()
+                difficulty_level: currentAnalysis.difficulty.toLowerCase()
             });
 
             if (error) {
@@ -321,15 +333,19 @@ Rules:
 
         <button 
           onClick={handleSend}
-          disabled={sending || !showPreview}
+          // Enable button even if no preview (will auto-analyze)
+          disabled={sending || text.trim().length === 0} 
           className="w-full h-[64px] bg-[#FFD740] rounded-xl border-[5px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center gap-3 mt-auto active:translate-y-[4px] active:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {sending ? (
-             <Loader size={24} color="black" className="animate-spin" />
+             <div className="flex items-center gap-2">
+                 <Loader size={24} color="black" className="animate-spin" />
+                 <span className="text-black text-[10px]">ANALYZING & SENDING...</span>
+             </div>
           ) : (
              <>
                 <span className="text-black text-[14px] font-bold tracking-wide">
-                    {">>>"} SEND VIBE! {"<<<"}
+                    {showPreview ? ">>> SEND VIBE! <<<" : ">>> AUTO SEND <<<"}
                 </span>
                 <Rocket size={24} color="black" strokeWidth={3} className={showPreview ? "animate-pulse" : ""} />
              </>
