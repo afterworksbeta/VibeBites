@@ -30,25 +30,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend }) => {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         
         // STRICT PROMPT: NO PHONETICS
-        const prompt = `
-          Task: Convert "${text}" to Emojis by MEANING, NOT SOUND.
-          
-          STRICT RULES:
-          1. NO PHONETIC MATCHING:
-             - "Hi" is a greeting, NOT "High" (⬆️).
-             - "I" is self, NOT "Eye" (👁️).
-             
-          2. USE DIRECT TRANSLATION:
-             - "Hi" -> ["👋"]
-             - "Hello" -> ["👋"]
-             - "Love" -> ["❤️"]
-             - "Cool" -> ["😎"]
-             - "Yes" -> ["👍"]
-             
-          3. Keep it to 1-3 emojis.
-          
-          Return JSON:
-          { "emojis": ["👋"] }
+        const prompt = `Convert text to emojis (1-3 emojis representing the meaning):
+Text: "${text}"
+Return JSON array only.
+Examples:
+- "Hi" -> ["👋"]
+- "Hello" -> ["👋","😊"]
+- "Love" -> ["❤️"]
+- "Thank you" -> ["🙏","😊"]`;
         `;
 
         const response = await ai.models.generateContent({

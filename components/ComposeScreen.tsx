@@ -39,37 +39,26 @@ export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) 
     
     setLoading(true);
     try {
-        const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         
         // STRICT PROMPT: NO PHONETICS
-        const prompt = `
-          Task: Translate the text "${text}" into Emojis based on MEANING, NOT SOUND.
-          
-          CRITICAL RULES (FOLLOW STRICTLY):
-          1. NO PHONETIC MATCHING: 
-             - DO NOT use ⬆️ (Up/High) for "Hi".
-             - DO NOT use 👁️ (Eye) for "I".
-             - DO NOT use 🐝 (Bee) for "Be".
-             
-          2. USE DIRECT ACTIONS/OBJECTS:
-             - "Hi", "Hello", "Hey" -> MUST BE ["👋"] (Waving Hand).
-             - "Bye", "See ya" -> ["👋"] or ["✌️"].
-             - "Love" -> ["❤️"].
-             - "Yes" -> ["👍"] or ["👌"].
-             - "No" -> ["👎"] or ["❌"].
-          
-          3. K.I.S.S (Keep It Simple & Short):
-             - Use 1-3 emojis max for simple phrases.
-          
-          OUTPUT FORMAT (JSON):
-          {
-            "emojis": ["👋"],
-            "hint": "A greeting",
-            "topic": "SOCIAL",
-            "difficulty": "EASY",
-            "points": 50
-          }
-        `;
+        const prompt = `Analyze this message for an emoji guessing game:
+
+Message: "${inputText}"
+
+Return JSON with:
+{
+  "emojis": ["emoji1", "emoji2", "emoji3"],
+  "hint": "brief hint about the topic",
+  "difficulty": "easy|medium|hard"
+}
+
+Rules:
+1. Use 3-5 emojis that represent the key words or concepts
+2. Emojis should be guessable but fun
+3. Hint should NOT reveal the answer directly
+4. For greetings use gesture emojis (👋, 🙋, etc.)
+5. For objects use the object emoji directly`;
 
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
