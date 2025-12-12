@@ -271,6 +271,12 @@ const App: React.FC = () => {
     setCurrentScreen('home');
     setSelectedFriend(null);
   };
+  
+  // NEW: Handle successful send from Compose Screen
+  const handleComposeSuccess = () => {
+      setCurrentScreen('chat');
+      // selectedFriend is already set, so it will display the chat
+  };
 
   const handleProfileClick = () => setCurrentScreen('profile');
   const handleSettingsClick = () => setCurrentScreen('settings');
@@ -424,6 +430,7 @@ const App: React.FC = () => {
           <ComposeScreen 
             friend={selectedFriend} 
             onBack={handleBack}
+            onSuccess={handleComposeSuccess} // Pass the success handler
           />
         )}
 

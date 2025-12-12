@@ -9,6 +9,7 @@ import { supabase } from '../lib/supabaseClient';
 
 interface ComposeScreenProps {
   onBack: () => void;
+  onSuccess: () => void;
   friend: Friend;
 }
 
@@ -20,7 +21,7 @@ interface VibeAnalysis {
   points: number;
 }
 
-export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, friend }) => {
+export const ComposeScreen: React.FC<ComposeScreenProps> = ({ onBack, onSuccess, friend }) => {
   const [text, setText] = useState('');
   const [showPreview, setShowPreview] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -168,10 +169,11 @@ Rules:
                 console.error("[ComposeScreen] Supabase Error:", error);
                 throw error;
             }
-            onBack();
+            // Navigate to chat instead of home
+            onSuccess();
         } else {
              // Mock mode
-            setTimeout(() => onBack(), 1000);
+            setTimeout(() => onSuccess(), 1000);
         }
     } catch (e: any) {
         console.error("[ComposeScreen] Send Failed:", e);

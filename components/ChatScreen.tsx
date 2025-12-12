@@ -109,6 +109,12 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
             setChatMessages(prev => {
                 const dbMessages = data.map(m => mapToMessage(m, currentUserId));
                 const localPending = prev.filter(m => m.status === 'SENDING');
+                
+                // Deduplicate: If localPending has a message that is now in DB (by logic of content/time or just assuming flush)
+                // Actually, duplicate check is hard without unique client ID. 
+                // But for now, we just append pending. 
+                // However, handleSendMessage updates the pending message to SENT in place.
+                // So localPending should be empty if the send finished.
                 return [...dbMessages, ...localPending];
             });
         }
@@ -180,10 +186,10 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
     };
   }, [friend.id]); 
 
-  // Force scroll on messages update
+  // Force scroll on messages update - DEPEND ON ARRAY ITSELF, not just length
   useEffect(() => {
     scrollToBottom();
-  }, [chatMessages.length, isSending]);
+  }, [chatMessages, isSending]);
 
   const scrollToBottom = () => {
     if (messagesEndRef.current) {
@@ -291,6 +297,8 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ friend, messages: initia
         setChatMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'FAILED' } : m));
     } finally {
         setIsSending(false);
+        // Ensure one last scroll
+        setTimeout(scrollToBottom, 100);
     }
   };
 

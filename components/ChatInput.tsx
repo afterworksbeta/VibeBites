@@ -158,7 +158,7 @@ Return JSON:
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={showPreview ? "READY TO SEND!" : "TYPE VIBE..."}
+            placeholder={showPreview ? "PRESS SEND ->" : "TYPE VIBE..."}
             disabled={showPreview} // Lock input while previewing
             className={`flex-1 h-[48px] rounded-lg border-[3px] border-black px-4 font-['Press_Start_2P'] text-[12px] outline-none shadow-[2px_2px_0_rgba(0,0,0,0.1)] focus:shadow-[2px_2px_0_rgba(0,0,0,1)] transition-all bg-[#333333] text-white placeholder:text-gray-500 uppercase ${showPreview ? 'opacity-50' : ''}`}
         />
@@ -166,7 +166,7 @@ Return JSON:
         <button 
             onClick={handleAction}
             disabled={loading || text.trim().length === 0}
-            className={`w-[48px] h-[48px] rounded-lg border-[3px] border-black flex items-center justify-center active:translate-y-1 active:shadow-none transition-all disabled:opacity-50 disabled:cursor-not-allowed ${showPreview ? 'bg-[#00E676]' : 'bg-[#FFD740]'}`}
+            className={`w-[48px] h-[48px] rounded-lg border-[3px] border-black flex items-center justify-center active:translate-y-1 active:shadow-none transition-all disabled:opacity-50 disabled:cursor-not-allowed ${showPreview ? 'bg-[#00E676] animate-pulse' : 'bg-[#FFD740]'}`}
             style={{
                 boxShadow: '4px 4px 0px 0px #000000'
             }}
