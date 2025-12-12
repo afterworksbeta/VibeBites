@@ -402,24 +402,63 @@ const App: React.FC = () => {
     }
   };
 
-  const handleUpdateUsername = async (newName: string) => {
+  const handleUpdateUsername = async (newName: string): Promise<boolean> => {
       const trimmed = newName.trim();
-      if (!trimmed) return;
+      if (!trimmed) return false;
       
+      const previousUsername = currentUsername;
+      
+      // 1. Optimistic Update (Immediate UI change)
       setCurrentUsername(trimmed);
 
       if (session) {
-         const { error } = await supabase
-          .from('profiles')
-          .update({ username: trimmed })
-          .eq('id', session.user.id);
-         
-         if (error) {
-             console.error("Error updating username", error);
-             alert("Could not update username. Please try again.");
-             fetchProfileWithRetry(session.user.id); // Revert
-         }
+          try {
+             // 2. Update Database (Source of Truth)
+             const { error: dbError } = await supabase
+              .from('profiles')
+              .update({ username: trimmed })
+              .eq('id', session.user.id);
+             
+             if (dbError) {
+                 // Explicitly log the error object as a string so it's readable
+                 console.error("DB Error updating username:", JSON.stringify(dbError));
+                 throw new Error(dbError.message || "Database update failed");
+             }
+
+             // 3. Update Auth Session Metadata (Persistence - Non-Fatal)
+             try {
+                const { error: authError } = await supabase.auth.updateUser({
+                    data: { username: trimmed }
+                });
+                if (authError) {
+                    console.warn("Auth metadata update warning:", JSON.stringify(authError));
+                }
+             } catch (authEx) {
+                console.warn("Auth metadata update exception:", authEx);
+             }
+             
+             return true;
+
+          } catch (error: any) {
+             console.error("Error updating username:", error);
+             // Revert optimistic update
+             setCurrentUsername(previousUsername);
+             
+             let friendlyMessage = error.message || "Unknown error";
+             
+             // Handle "violates check constraint" error from DB
+             if (friendlyMessage.includes("username_length") || friendlyMessage.includes("violates check constraint")) {
+                 friendlyMessage = "Username must be between 3 and 12 characters.";
+             } else if (friendlyMessage.includes("duplicate key") || friendlyMessage.includes("violates unique constraint")) {
+                 friendlyMessage = "Username already taken.";
+             }
+
+             alert(`Update Failed: ${friendlyMessage}`);
+             fetchProfileWithRetry(session.user.id); 
+             return false;
+          }
       }
+      return true;
   };
 
   return (

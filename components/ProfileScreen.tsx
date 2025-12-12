@@ -11,7 +11,7 @@ interface ProfileScreenProps {
   onSettingsClick: () => void;
   onInviteClick: () => void;
   onEditProfile?: () => void;
-  onUpdateUsername?: (name: string) => void;
+  onUpdateUsername?: (name: string) => Promise<boolean>;
   currentSeed?: string;
   currentBgColor?: string;
   username?: string;
@@ -31,12 +31,15 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 }) => {
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempName, setTempName] = useState(username);
+  const [isSavingName, setIsSavingName] = useState(false);
   const [stats, setStats] = useState({ sent: 0, solved: 0, match: 0 });
 
-  // Sync state if prop changes
+  // Sync state if prop changes, BUT only if not currently editing to prevent text jumping during optimistic revert
   useEffect(() => {
-    setTempName(username);
-  }, [username]);
+    if (!isEditingName) {
+        setTempName(username);
+    }
+  }, [username, isEditingName]);
 
   // Fetch Real Stats
   useEffect(() => {
@@ -78,11 +81,31 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     }
   };
 
-  const handleSaveName = () => {
-      if (onUpdateUsername && tempName.trim().length > 0) {
-          onUpdateUsername(tempName.trim());
+  const handleSaveName = async () => {
+      const trimmed = tempName.trim();
+      
+      // Enforce 3 char limit to match database constraint "username_length"
+      if (trimmed.length < 3) {
+          alert("NAME TOO SHORT (MIN 3 CHARS)");
+          return;
       }
-      setIsEditingName(false);
+
+      if (onUpdateUsername && trimmed !== username) {
+          setIsSavingName(true);
+          try {
+              const success = await onUpdateUsername(trimmed);
+              if (success) {
+                  setIsEditingName(false);
+              }
+              // If success is false, we stay in editing mode (App.tsx shows alert)
+          } catch (error) {
+              console.error("Save error:", error);
+          } finally {
+              setIsSavingName(false);
+          }
+      } else {
+          setIsEditingName(false);
+      }
   };
 
   const handleCancelName = () => {
@@ -148,31 +171,41 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         </div>
 
         {/* Username (Editable - Styled as Screenshot) */}
-        <div className="relative mb-3 flex flex-col items-center group">
+        <div className="relative mb-3 flex flex-col items-center group w-full px-8">
              {isEditingName ? (
-                 <div className="bg-white border-[4px] border-black p-2 shadow-[4px_4px_0_0_#000000] flex items-center gap-2 max-w-[280px] z-10 relative">
+                 <form 
+                    onSubmit={(e) => {
+                        e.preventDefault();
+                        handleSaveName();
+                    }}
+                    className="bg-white border-[4px] border-black p-2 shadow-[4px_4px_0_0_#000000] flex items-center gap-2 w-full max-w-[320px] z-10 relative"
+                 >
                      <input 
                         className="flex-1 bg-transparent outline-none font-['Press_Start_2P'] text-[14px] uppercase text-black min-w-0"
                         value={tempName}
                         onChange={(e) => setTempName(e.target.value.toUpperCase())}
                         autoFocus
-                        onKeyDown={(e) => e.key === 'Enter' && handleSaveName()}
                         maxLength={12}
                         placeholder="NAME?"
                      />
-                     <button 
-                        onClick={handleSaveName} 
-                        className="bg-[#00E676] p-1 border-2 border-black hover:scale-110 transition-transform active:translate-y-1"
-                     >
-                         <Check size={16} color="black" strokeWidth={3} />
-                     </button>
-                     <button 
-                        onClick={handleCancelName} 
-                        className="bg-[#FF5252] p-1 border-2 border-black hover:scale-110 transition-transform active:translate-y-1"
-                     >
-                         <X size={16} color="black" strokeWidth={3} />
-                     </button>
-                 </div>
+                     <div className="flex gap-1">
+                         <button 
+                            type="submit"
+                            disabled={isSavingName} 
+                            className="w-9 h-9 bg-[#00E676] border-2 border-black hover:scale-105 transition-transform active:translate-y-1 disabled:opacity-50 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-black"
+                         >
+                             {isSavingName ? <Loader size={16} className="animate-spin" color="black" /> : <Check size={18} color="black" strokeWidth={4} />}
+                         </button>
+                         <button 
+                            type="button"
+                            onClick={handleCancelName}
+                            disabled={isSavingName} 
+                            className="w-9 h-9 bg-[#FF5252] border-2 border-black hover:scale-105 transition-transform active:translate-y-1 disabled:opacity-50 flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-black"
+                         >
+                             <X size={18} color="black" strokeWidth={4} />
+                         </button>
+                     </div>
+                 </form>
              ) : (
                 <div className="relative z-10">
                     <div 
@@ -189,7 +222,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
              )}
              
              {/* The Black Notch underneath */}
-             <div className="w-16 h-4 bg-black rounded-full mt-[-6px] z-0"></div>
+             {!isEditingName && <div className="w-16 h-4 bg-black rounded-full mt-[-6px] z-0"></div>}
         </div>
       </div>
 
